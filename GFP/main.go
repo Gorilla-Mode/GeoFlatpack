@@ -8,6 +8,15 @@ import (
 	"strings"
 )
 
+func ValidateFile(file *string) error {
+	extenstion := filepath.Ext(*file)
+	if extenstion != ".gml" {
+		return fmt.Errorf("input file must have a .gml extension")
+	}
+
+	return nil
+}
+
 func main() {
 	inputFile := flag.String("i", "", "Path to the input file")
 	outputDir := flag.String("o", "", "Path to the output directory")
@@ -25,6 +34,16 @@ func main() {
 	if *inputFile == "" || flag.NArg() != 0 {
 		flag.Usage()
 		os.Exit(2)
+	}
+
+	err := ValidateFile(inputFile)
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, err)
+		if err != nil {
+			return
+		}
+
+		os.Exit(1)
 	}
 
 	name := strings.TrimSuffix(filepath.Base(*inputFile), filepath.Ext(*inputFile))
