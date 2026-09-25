@@ -1,15 +1,51 @@
 package main
 
 import (
+	"GeoFlatpack/validate"
+	"flag"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 )
 
 func main() {
+	inputFile := flag.String("i", "", "Path to the input file")
+	outputDir := flag.String("o", "", "Path to the output directory")
+	formatFlag := flag.String("f", string(validate.FormatMapLibre), "Output format: maplibre or sld")
 
-	s := "gopher"
-	fmt.Println("Hello and welcome, %s!", s)
+	flag.Usage = func() {
+		_, err := fmt.Fprintln(os.Stderr, "Usage gfp -i <input file> -f <stylesheet format> -o <output directory>")
+		if err != nil {
+			return
+		}
 
-	for i := 1; i <= 5; i++ {
-		fmt.Println("i =", 100/i)
+		flag.PrintDefaults()
 	}
+	flag.Parse()
+
+	if *inputFile == "" || flag.NArg() != 0 {
+		flag.Usage()
+		os.Exit(2)
+	}
+
+	if err := validate.Gml(*inputFile); err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "gfp:", err)
+		if err != nil {
+			return
+		}
+		os.Exit(1)
+	}
+
+	if err := validate.Format(validate.StyleFormat(*formatFlag)); err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "gfp:", err)
+		if err != nil {
+			return
+		}
+		os.Exit(1)
+	}
+
+	name := strings.TrimSuffix(filepath.Base(*inputFile), filepath.Ext(*inputFile))
+	output := filepath.Join(*outputDir, name+".gfp")
+	fmt.Printf("Converting %s to %s\n", *inputFile, output)
 }
