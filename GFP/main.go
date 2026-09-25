@@ -1,6 +1,7 @@
 package main
 
 import (
+	"GeoFlatpack/validate"
 	"flag"
 	"fmt"
 	"os"
@@ -8,21 +9,13 @@ import (
 	"strings"
 )
 
-func ValidateFile(file string) error {
-	extenstion := filepath.Ext(file)
-	if extenstion != ".gml" {
-		return fmt.Errorf("input file must have a .gml extension")
-	}
-
-	return nil
-}
-
 func main() {
 	inputFile := flag.String("i", "", "Path to the input file")
 	outputDir := flag.String("o", "", "Path to the output directory")
+	formatFlag := flag.String("f", string(validate.FormatMapLibre), "Output format: maplibre or sld")
 
 	flag.Usage = func() {
-		_, err := fmt.Fprintln(os.Stderr, "Usage gfp -i <input file> -o <output directory>")
+		_, err := fmt.Fprintln(os.Stderr, "Usage gfp -i <input file> -f <stylesheet format> -o <output directory>")
 		if err != nil {
 			return
 		}
@@ -36,7 +29,15 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := ValidateFile(*inputFile); err != nil {
+	if err := validate.Gml(*inputFile); err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "gfp:", err)
+		if err != nil {
+			return
+		}
+		os.Exit(1)
+	}
+
+	if err := validate.Format(validate.StyleFormat(*formatFlag)); err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "gfp:", err)
 		if err != nil {
 			return
