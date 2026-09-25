@@ -8,8 +8,8 @@ import (
 	"strings"
 )
 
-func ValidateFile(file *string) error {
-	extenstion := filepath.Ext(*file)
+func ValidateFile(file string) error {
+	extenstion := filepath.Ext(file)
 	if extenstion != ".gml" {
 		return fmt.Errorf("input file must have a .gml extension")
 	}
@@ -36,13 +36,11 @@ func main() {
 		os.Exit(2)
 	}
 
-	err := ValidateFile(inputFile)
-	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, err)
+	if err := ValidateFile(*inputFile); err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "gfp:", err)
 		if err != nil {
 			return
 		}
-
 		os.Exit(1)
 	}
 
