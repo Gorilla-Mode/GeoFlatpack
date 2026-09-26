@@ -32,15 +32,15 @@ The output path is `<output-directory>/<input-name>.gfp`. For example, `map.gml`
 
 ## Web example
 
-The `web/` directory contains a browser-based MapLibre example that displays the sample obstacle data from `test_data/`. To run it locally, install a current Node.js LTS release and, from the repository root, run:
+### Live demo
 
-```sh
-cd web
-npm install
-npm run dev
-```
+> Live demo uses the the .fgb and .json files in the `test_data` directory.
 
-Open the local URL printed by Vite. The map uses an online basemap, so it requires internet access. See the [web example README](web/README.md) for details about its scripts and sample data.
+[Open the live demo](https://gorilla-mode.github.io/GeoFlatpack/)
+
+### Further docs
+
+The `web/` directory contains a browser-based MapLibre example. See the [web README](web/README.md) for setup and app details.
 
 ## Dependencies
 
@@ -56,5 +56,6 @@ Open the local URL printed by Vite. The map uses an online basemap, so it requir
 - [x] Convert GML to FGB
 - [x] Load FGB into memory
 - [x] Parse FGB
+- [x] Web demo
 - [ ] Generate MapLibre stylesheet
 - [ ] Symbology support
