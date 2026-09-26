@@ -17,21 +17,25 @@
   <gml:featureMember>
     <ogr:Obstacle fid="Obstacle.2">
       <ogr:geometryProperty>
-        <gml:Point srsName="EPSG:4326">
-          <gml:coordinates>10.7490,59.9134</gml:coordinates>
-        </gml:Point>
+        <gml:LineString srsName="EPSG:4326">
+          <gml:coordinates>10.7480,59.9132 10.7490,59.9134 10.7502,59.9129</gml:coordinates>
+        </gml:LineString>
       </ogr:geometryProperty>
-      <ogr:kind>mast</ogr:kind>
-      <ogr:name>Radio mast</ogr:name>
-      <ogr:height_m>32</ogr:height_m>
+      <ogr:kind>power_line</ogr:kind>
+      <ogr:name>Overhead cable</ogr:name>
+      <ogr:height_m>15</ogr:height_m>
     </ogr:Obstacle>
   </gml:featureMember>
   <gml:featureMember>
     <ogr:Obstacle fid="Obstacle.3">
       <ogr:geometryProperty>
-        <gml:Point srsName="EPSG:4326">
-          <gml:coordinates>10.7514,59.9118</gml:coordinates>
-        </gml:Point>
+        <gml:Polygon srsName="EPSG:4326">
+          <gml:outerBoundaryIs>
+            <gml:LinearRing>
+              <gml:coordinates>10.7510,59.9115 10.7518,59.9115 10.7518,59.9120 10.7510,59.9120 10.7510,59.9115</gml:coordinates>
+            </gml:LinearRing>
+          </gml:outerBoundaryIs>
+        </gml:Polygon>
       </ogr:geometryProperty>
       <ogr:kind>building</ogr:kind>
       <ogr:name>Office block</ogr:name>
