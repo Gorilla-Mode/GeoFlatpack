@@ -11,8 +11,10 @@ const (
 
 func Format(format StyleFormat) error {
 	switch format {
-	case FormatMapLibre, FormatSLD:
+	case FormatMapLibre:
 		return nil
+	case FormatSLD:
+		return fmt.Errorf("format not supported yet: %s", format)
 	default:
 		return fmt.Errorf("invalid style format: %s", format)
 	}
