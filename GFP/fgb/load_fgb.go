@@ -11,12 +11,22 @@ import (
 	"github.com/gogama/flatgeobuf/flatgeobuf/flat"
 )
 
-type FGB struct {
+type RawFgb struct {
 	header   *flat.Header
 	Features []flat.Feature
 }
 
-func LoadFgb(src io.Reader) (loadedFGB *FGB, err error) {
+type Fgb struct {
+	Header   *flat.Header
+	Features []Feature
+}
+
+type Feature struct {
+	Raw        flat.Feature
+	Properties map[string]any
+}
+
+func LoadFgb(src io.Reader) (loadedFGB *Fgb, err error) {
 	reader := flatgeobuf.NewFileReader(src)
 	defer func() {
 		if closeErr := reader.Close(); closeErr != nil {
@@ -35,10 +45,47 @@ func LoadFgb(src io.Reader) (loadedFGB *FGB, err error) {
 		return nil, fmt.Errorf("read features: %w", err)
 	}
 
-	return &FGB{
+	raw := RawFgb{
 		header:   header,
 		Features: features,
-	}, nil
+	}
+	return buildFGB(raw)
+}
+
+func buildFGB(rawFgb RawFgb) (*Fgb, error) {
+	fgb := &Fgb{
+		Header:   rawFgb.header,
+		Features: make([]Feature, 0, len(rawFgb.Features)),
+	}
+
+	for i := range rawFgb.Features {
+		props := make(map[string]any)
+
+		if rawFgb.Features[i].PropertiesLength() > 0 {
+			var schema flatgeobuf.Schema = rawFgb.header
+			if rawFgb.Features[i].ColumnsLength() > 0 {
+				schema = &rawFgb.Features[i]
+			}
+
+			values, err := flatgeobuf.NewPropReader(
+				bytes.NewReader(rawFgb.Features[i].PropertiesBytes()),
+			).ReadSchema(schema)
+			if err != nil {
+				return nil, fmt.Errorf("feature %d properties: %w", i, err)
+			}
+
+			for _, value := range values {
+				props[string(value.Col.Name())] = value.Value
+			}
+		}
+
+		fgb.Features = append(fgb.Features, Feature{
+			Raw:        rawFgb.Features[i],
+			Properties: props,
+		})
+	}
+
+	return fgb, nil
 }
 
 func PrintHeader(header *flat.Header) string {
@@ -73,59 +120,33 @@ func PrintHeader(header *flat.Header) string {
 	return b.String()
 }
 
-func InspectFgb(fgb *FGB) string {
+func InspectFgb(fgb *Fgb) string {
 	var b strings.Builder
-
-	b.WriteString(PrintHeader(fgb.header))
+	b.WriteString(PrintHeader(fgb.Header))
 
 	for i := range fgb.Features {
-		geometry := fgb.Features[i].Geometry(&flat.Geometry{})
-		if geometry == nil {
-			continue
+		feature := &fgb.Features[i]
+		_, _ = fmt.Fprintf(&b, "\nFeature %d\n", i+1)
+
+		if geometry := feature.Raw.Geometry(&flat.Geometry{}); geometry != nil {
+			_, _ = fmt.Fprintf(&b, "\tGeometry Type: %s\n", geometry.Type())
+
+			for j := 0; j+1 < geometry.XyLength(); j += 2 {
+				_, _ = fmt.Fprintf(&b, "\tX: %g Y: %g\n",
+					geometry.Xy(j), geometry.Xy(j+1))
+			}
 		}
 
-		_, _ = fmt.Fprintf(&b, "\nFeature %d\n\tGeometry Type: %s\n",
-			i+1, geometry.Type())
-
-		props, err := FeatureProperties(fgb, &fgb.Features[i])
-		if err != nil {
-			return ""
+		names := make([]string, 0, len(feature.Properties))
+		for name := range feature.Properties {
+			names = append(names, name)
 		}
 
-		_, _ = fmt.Fprintf(&b, "\tkind: %v\n\tname: %v\n\theight: %v\n",
-			props["kind"], props["name"], props["height_m"])
-
-		for j := 0; j+1 < geometry.XyLength(); j += 2 {
-			_, _ = fmt.Fprintf(&b, "\tX: %g Y: %g\n",
-				geometry.Xy(j), geometry.Xy(j+1))
+		for _, name := range names {
+			_, _ = fmt.Fprintf(&b, "\t%s: %v\n",
+				name, feature.Properties[name])
 		}
 	}
 
 	return b.String()
-}
-
-func FeatureProperties(fgb *FGB, feature *flat.Feature) (map[string]any, error) {
-	properties := make(map[string]any)
-
-	if feature.PropertiesLength() == 0 {
-		return properties, nil
-	}
-
-	schema := flatgeobuf.Schema(fgb.header)
-	if feature.ColumnsLength() > 0 {
-		schema = feature
-	}
-
-	reader := flatgeobuf.NewPropReader(
-		bytes.NewReader(feature.PropertiesBytes()),
-	)
-	values, err := reader.ReadSchema(schema)
-	if err != nil {
-		return nil, fmt.Errorf("decode FGB properties: %w", err)
-	}
-
-	for _, property := range values {
-		properties[string(property.Col.Name())] = property.Value
-	}
-	return properties, nil
 }
