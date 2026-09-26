@@ -7,7 +7,9 @@ import (
 	"github.com/airbusgeo/godal"
 )
 
-func GmlToFgb(input string, output string) error {
+// GmlToFgb loads a GML file into an in-memory GDAL vector dataset.
+// The caller is responsible for closing the returned dataset.
+func GmlToFgb(input string) (*godal.Dataset, error) {
 	godal.RegisterAll()
 
 	src, err := godal.Open(input,
@@ -16,22 +18,23 @@ func GmlToFgb(input string, output string) error {
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to open input GML file: %v", err)
+		return nil, err
 	}
 
 	defer func(src *godal.Dataset, opts ...godal.CloseOption) {
 		err := src.Close(opts...)
 		if err != nil {
-			_, err := fmt.Fprintf(os.Stderr, "failed to close input GML file: %v\n", err)
-			if err != nil {
-				return
-			}
+			_, _ = fmt.Fprint(os.Stderr, "Error closing source dataset:", err)
 		}
 	}(src)
 
-	dst, err := src.VectorTranslate(output, []string{"-f", "FlatGeobuf"})
+	return src.VectorTranslate("", nil, godal.Memory)
+}
+
+func WriteFgb(fgb *godal.Dataset, output string) error {
+	dst, err := fgb.VectorTranslate(output, []string{"-f", "FlatGeobuf"})
 	if err != nil {
-		return fmt.Errorf("failed to translate GML to FlatGeobuf: %v", err)
+		return err
 	}
 
 	return dst.Close()

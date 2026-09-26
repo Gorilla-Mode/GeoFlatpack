@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/airbusgeo/godal"
 )
 
 func main() {
@@ -50,12 +52,21 @@ func main() {
 	output := filepath.Join(*outputDir, name+".fgb")
 	fmt.Printf("Converting %s to %s\n", *inputFile, output)
 
-	err := convert.GmlToFgb(*inputFile, output)
+	fgb, err := convert.GmlToFgb(*inputFile)
 	if err != nil {
 		_, err := fmt.Fprintln(os.Stderr, "gfp: failed to convert GML to FlatGeobuf:", err)
 		if err != nil {
 			return
 		}
+		os.Exit(1)
+	}
+	defer func(fgb *godal.Dataset, opts ...godal.CloseOption) {
+		_ = fgb.Close(opts...)
+	}(fgb)
+
+	err = convert.WriteFgb(fgb, output)
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to write FlatGeobuf:", err)
 		os.Exit(1)
 	}
 }
