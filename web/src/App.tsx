@@ -18,6 +18,8 @@ export default function App() {
   const container = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
+  const [inspecting, setInspecting] = useState(false);
 
   useEffect(() => {
     if (!container.current) return;
@@ -26,6 +28,7 @@ export default function App() {
     let map: Map;
     setLoading(true);
     setError(null);
+    setGeojson(null);
 
     try {
       map = new Map({
@@ -59,6 +62,8 @@ export default function App() {
           if (controller.signal.aborted) return;
           data.features.push(feature);
         }
+        if (controller.signal.aborted) return;
+        setGeojson(data);
 
         await ready;
         if (controller.signal.aborted) return;
@@ -89,11 +94,28 @@ export default function App() {
   return (
     <main>
       <div ref={container} className="map" aria-label="Map of sample obstacles in Oslo" />
-      {(loading || error) && (
-        <div className="map-status" role={error ? 'alert' : 'status'}>
-          {error ?? 'Loading map and sample obstacles…'}
-        </div>
-      )}
+      <div className="map-overlay">
+        <button
+          type="button"
+          className="geojson-toggle"
+          disabled={geojson === null}
+          aria-expanded={inspecting}
+          aria-controls="geojson-panel"
+          onClick={() => setInspecting((open) => !open)}
+        >
+          {inspecting ? 'Hide GeoJSON' : 'Inspect GeoJSON'}
+        </button>
+        {(loading || error) && (
+          <div className="map-status" role={error ? 'alert' : 'status'}>
+            {error ?? 'Loading map and sample obstacles…'}
+          </div>
+        )}
+        {inspecting && geojson !== null && (
+          <pre id="geojson-panel" className="geojson-panel" tabIndex={0} aria-label="Decoded GeoJSON">
+            {JSON.stringify(geojson, null, 2)}
+          </pre>
+        )}
+      </div>
     </main>
   );
 }

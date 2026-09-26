@@ -16,15 +16,59 @@ body {
   inset: 0;
 }
 
-.map-status {
+.map-overlay {
   position: absolute;
   top: 12px;
   left: 12px;
-  max-width: min(360px, calc(100vw - 100px));
-  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: min(560px, calc(100vw - 76px));
+  max-height: calc(100dvh - 24px);
+  pointer-events: none;
+}
+
+.geojson-toggle,
+.map-status,
+.geojson-panel {
+  box-sizing: border-box;
+  pointer-events: auto;
   border-radius: 6px;
   background: white;
   color: #1e293b;
   box-shadow: 0 1px 6px #0003;
+}
+
+.geojson-toggle {
+  flex-shrink: 0;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.geojson-toggle:disabled {
+  color: #64748b;
+  cursor: default;
+}
+
+.map-status {
+  flex-shrink: 0;
+  max-width: min(360px, calc(100vw - 100px));
+  padding: 10px 14px;
   font-size: 14px;
+}
+
+.geojson-panel {
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.5;
 }
