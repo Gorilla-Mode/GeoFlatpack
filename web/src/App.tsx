@@ -11,14 +11,53 @@ import sampleUrl from '../../test_data/sample-obstacles.fgb?url';
 const sampleStyle = sampleStyleJson as unknown as StyleSpecification;
 const sourceId = 'geoflatpack-obstacles';
 
+type Bounds = [[number, number], [number, number]];
+
+function getFeatureCollectionBounds(data: FeatureCollection): Bounds | null {
+  let west = Infinity;
+  let south = Infinity;
+  let east = -Infinity;
+  let north = -Infinity;
+
+  function visit(value: unknown): void {
+    if (!Array.isArray(value)) return;
+    if (value.length >= 2 && typeof value[0] === 'number' && typeof value[1] === 'number') {
+      const [longitude, latitude] = value;
+      if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
+        west = Math.min(west, longitude);
+        south = Math.min(south, latitude);
+        east = Math.max(east, longitude);
+        north = Math.max(north, latitude);
+      }
+      return;
+    }
+    for (const child of value) visit(child);
+  }
+
+  function visitGeometry(geometry: unknown): void {
+    if (!geometry || typeof geometry !== 'object') return;
+    const candidate = geometry as { type?: string; coordinates?: unknown; geometries?: unknown[] };
+    if (candidate.type === 'GeometryCollection') {
+      candidate.geometries?.forEach(visitGeometry);
+    } else {
+      visit(candidate.coordinates);
+    }
+  }
+
+  for (const feature of data.features) visitGeometry(feature.geometry);
+  return Number.isFinite(west) ? [[west, south], [east, north]] : null;
+}
+
 // Let Vite bundle the worker and its imports for development and production.
 setWorkerUrl(mapWorkerUrl);
 
 export default function App() {
   const container = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<Map | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
+  const [bounds, setBounds] = useState<Bounds | null>(null);
   const [inspecting, setInspecting] = useState<'geojson' | 'style' | null>(null);
 
   useEffect(() => {
@@ -29,6 +68,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     setGeojson(null);
+    setBounds(null);
 
     try {
       map = new Map({
@@ -42,6 +82,7 @@ export default function App() {
       setLoading(false);
       return;
     }
+    mapRef.current = map;
 
     map.addControl(new NavigationControl(), 'top-right');
     const popup = new Popup({
@@ -83,6 +124,8 @@ export default function App() {
             obstacleLayerIds.push(`geoflatpack-${layer.id}`);
           }
         }
+        const dataBounds = getFeatureCollectionBounds(data);
+        if (obstacleLayerIds.length > 0 && dataBounds) setBounds(dataBounds);
 
         function findObstacle(event: MapMouseEvent) {
           const { x, y } = event.point;
@@ -143,6 +186,7 @@ export default function App() {
       removeObstacleInteractions();
       popup.remove();
       map.remove();
+      if (mapRef.current === map) mapRef.current = null;
     };
   }, []);
 
@@ -151,6 +195,25 @@ export default function App() {
       <div ref={container} className="map" aria-label="Map of sample obstacles in Oslo" />
       <div className="map-overlay">
         <div className="inspector-controls">
+          <button
+            type="button"
+            className="inspector-toggle"
+            disabled={bounds === null || mapRef.current === null}
+            onClick={() => {
+              const map = mapRef.current;
+              if (!map || !bounds) return;
+              const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+              map.fitBounds(bounds, {
+                padding: 48,
+                maxZoom: 18,
+                duration: reducedMotion ? 0 : 500,
+                bearing: 0,
+                pitch: 0,
+              });
+            }}
+          >
+            Center on bbox
+          </button>
           <button
             type="button"
             className="inspector-toggle"
