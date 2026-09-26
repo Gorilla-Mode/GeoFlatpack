@@ -1,6 +1,7 @@
 package fgb
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -86,6 +87,14 @@ func InspectFgb(fgb *FGB) string {
 		_, _ = fmt.Fprintf(&b, "\nFeature %d\n\tGeometry Type: %s\n",
 			i+1, geometry.Type())
 
+		props, err := FeatureProperties(fgb, &fgb.Features[i])
+		if err != nil {
+			return ""
+		}
+
+		_, _ = fmt.Fprintf(&b, "\tkind: %v\n\tname: %v\n\theight: %v\n",
+			props["kind"], props["name"], props["height_m"])
+
 		for j := 0; j+1 < geometry.XyLength(); j += 2 {
 			_, _ = fmt.Fprintf(&b, "\tX: %g Y: %g\n",
 				geometry.Xy(j), geometry.Xy(j+1))
@@ -93,4 +102,30 @@ func InspectFgb(fgb *FGB) string {
 	}
 
 	return b.String()
+}
+
+func FeatureProperties(fgb *FGB, feature *flat.Feature) (map[string]any, error) {
+	properties := make(map[string]any)
+
+	if feature.PropertiesLength() == 0 {
+		return properties, nil
+	}
+
+	schema := flatgeobuf.Schema(fgb.header)
+	if feature.ColumnsLength() > 0 {
+		schema = feature
+	}
+
+	reader := flatgeobuf.NewPropReader(
+		bytes.NewReader(feature.PropertiesBytes()),
+	)
+	values, err := reader.ReadSchema(schema)
+	if err != nil {
+		return nil, fmt.Errorf("decode FGB properties: %w", err)
+	}
+
+	for _, property := range values {
+		properties[string(property.Col.Name())] = property.Value
+	}
+	return properties, nil
 }
