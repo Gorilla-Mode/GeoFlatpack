@@ -90,40 +90,13 @@ func WriteFgb(fgb *MemoryFGB, output string) error {
 	return os.Rename(dst.Name(), output)
 }
 
-func PrintFgb(fgb *MemoryFGB) error {
-	ds := fgb.Dataset
-	for _, layer := range ds.Layers() {
-		fmt.Printf("Layer: %s\n", layer.Name())
-		layer.ResetReading()
-
-		for i := 1; ; i++ {
-			feature := layer.NextFeature()
-			if feature == nil {
-				break
-			}
-
-			fmt.Printf("  Feature %d\n", i)
-			if geometry := feature.Geometry(); geometry != nil {
-				wkt, err := geometry.WKT()
-				if err != nil {
-					feature.Close()
-					return fmt.Errorf("feature %d geometry: %w", i, err)
-				}
-				fmt.Println("    Geometry: ", wkt)
-			}
-
-			for name, field := range feature.Fields() {
-				fmt.Printf("    %s: %s\n", name, field.String())
-			}
-			feature.Close()
-		}
-	}
-	return nil
-}
-
 func (fgb *MemoryFGB) Close() error {
 	return errors.Join(
 		fgb.Dataset.Close(),
 		godal.VSIUnlink(fgb.path),
 	)
+}
+
+func (fgb *MemoryFGB) OpenReader() (io.ReadCloser, error) {
+	return godal.VSIOpen(fgb.path)
 }

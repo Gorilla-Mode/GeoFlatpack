@@ -2,6 +2,7 @@ package main
 
 import (
 	"GeoFlatpack/convert"
+	"GeoFlatpack/fgb"
 	"GeoFlatpack/validate"
 	"flag"
 	"fmt"
@@ -44,19 +45,11 @@ func main() {
 	output := filepath.Join(*outputDir, name+".fgb")
 	fmt.Printf("Converting %s to %s\n", *inputFile, output)
 
-	fgb, err := convert.GmlToFgb(*inputFile)
+	memoryFGB, err := convert.GmlToFgb(*inputFile)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to convert GML to FlatGeobuf:", err)
 
 		os.Exit(1)
-	}
-
-	if *verbose {
-		err := convert.PrintFgb(fgb)
-		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to print FlatGeobuf:", err)
-			return
-		}
 	}
 
 	defer func(fgb *convert.MemoryFGB) {
@@ -64,9 +57,24 @@ func main() {
 		if err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to close FlatGeobuf:", err)
 		}
-	}(fgb)
+	}(memoryFGB)
 
-	err = convert.WriteFgb(fgb, output)
+	src, err := memoryFGB.OpenReader()
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to open FlatGeobuf:", err)
+		os.Exit(1)
+	}
+
+	LoadedFgb, err := fgb.LoadFgb(src)
+	if err != nil {
+		return
+	}
+
+	if *verbose {
+		fgb.InspectFgb(LoadedFgb)
+	}
+
+	err = convert.WriteFgb(memoryFGB, output)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to write FlatGeobuf:", err)
 		os.Exit(1)
