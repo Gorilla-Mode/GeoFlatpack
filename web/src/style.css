@@ -16,15 +16,120 @@ body {
   inset: 0;
 }
 
-.map-status {
+.map-overlay {
   position: absolute;
   top: 12px;
   left: 12px;
-  max-width: min(360px, calc(100vw - 100px));
-  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: calc(100vw - 76px);
+  max-height: calc(100dvh - 24px);
+  pointer-events: none;
+}
+
+.inspector-controls {
+  display: flex;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  gap: 8px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 4px;
+  margin: -4px;
+  pointer-events: auto;
+}
+
+.inspector-toggle,
+.map-status,
+.inspector-panel {
+  box-sizing: border-box;
+  pointer-events: auto;
   border-radius: 6px;
   background: white;
   color: #1e293b;
   box-shadow: 0 1px 6px #0003;
+}
+
+.inspector-toggle {
+  flex-shrink: 0;
+  max-width: 100%;
+  padding: 10px 14px;
+  border: 0;
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.inspector-toggle:disabled {
+  color: #64748b;
+  cursor: default;
+}
+
+.map-status {
+  flex-shrink: 0;
+  max-width: min(360px, calc(100vw - 100px));
+  padding: 10px 14px;
   font-size: 14px;
+}
+
+.inspector-panel {
+  width: min(560px, 100%);
+  min-height: 0;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.obstacle-popup .maplibregl-popup-content {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 6px;
+  color: #1e293b;
+}
+
+.header-panel-title {
+  margin: 0 0 10px;
+  font: 600 14px system-ui, sans-serif;
+}
+
+.header-tree {
+  width: max-content;
+  min-width: 100%;
+  white-space: pre;
+}
+
+.header-tree summary {
+  cursor: pointer;
+}
+
+.header-tree-children {
+  padding-left: 20px;
+}
+
+.header-tree summary:focus-visible,
+.inspector-toggle:focus-visible,
+.inspector-panel:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.obstacle-popup-title {
+  margin: 0 20px 10px 0;
+  font: 600 14px system-ui, sans-serif;
+}
+
+.obstacle-properties {
+  max-height: min(320px, 50dvh);
+  margin: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.5;
 }

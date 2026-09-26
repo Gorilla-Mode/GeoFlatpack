@@ -30,6 +30,18 @@ Then run it:
 
 The output path is `<output-directory>/<input-name>.gfp`. For example, `map.gml` produces `map.gfp` in the chosen output directory.
 
+## Web example
+
+The `web/` directory contains a browser-based MapLibre example that displays the sample obstacle data from `test_data/`. To run it locally, install a current Node.js LTS release and, from the repository root, run:
+
+```sh
+cd web
+npm install
+npm run dev
+```
+
+Open the local URL printed by Vite. The map uses an online basemap, so it requires internet access. See the [web example README](web/README.md) for details about its scripts and sample data.
+
 ## Dependencies
 
 | Module                          | Version                 | Purpose                                                          |
