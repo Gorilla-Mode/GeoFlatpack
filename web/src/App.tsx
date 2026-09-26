@@ -3,7 +3,9 @@ import { Map, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl';
 import type { MapMouseEvent, StyleSpecification } from 'maplibre-gl';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { deserialize } from 'flatgeobuf/lib/mjs/geojson.js';
+import type { HeaderMeta } from 'flatgeobuf/lib/mjs/header-meta.js';
 import type { FeatureCollection } from 'geojson';
+import HeaderTree from './HeaderTree';
 import sampleStyleJson from '../../test_data/sample-obstacles.maplibre.json';
 import sampleUrl from '../../test_data/sample-obstacles.fgb?url';
 
@@ -57,8 +59,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
+  const [header, setHeader] = useState<HeaderMeta | null>(null);
   const [bounds, setBounds] = useState<Bounds | null>(null);
-  const [inspecting, setInspecting] = useState<'geojson' | 'style' | null>(null);
+  const [inspecting, setInspecting] = useState<'geojson' | 'style' | 'header' | null>(null);
 
   useEffect(() => {
     if (!container.current) return;
@@ -68,6 +71,7 @@ export default function App() {
     setLoading(true);
     setError(null);
     setGeojson(null);
+    setHeader(null);
     setBounds(null);
 
     try {
@@ -105,7 +109,11 @@ export default function App() {
 
         const bytes = new Uint8Array(await response.arrayBuffer());
         const data: FeatureCollection = { type: 'FeatureCollection', features: [] };
-        for await (const feature of deserialize(bytes)) {
+        for await (const feature of deserialize(bytes, {
+          headerMetaFn: (metadata) => {
+            if (!controller.signal.aborted) setHeader(metadata);
+          },
+        })) {
           if (controller.signal.aborted) return;
           data.features.push(feature);
         }
@@ -217,6 +225,16 @@ export default function App() {
           <button
             type="button"
             className="inspector-toggle"
+            disabled={header === null}
+            aria-expanded={inspecting === 'header'}
+            aria-controls="inspector-panel"
+            onClick={() => setInspecting((active) => active === 'header' ? null : 'header')}
+          >
+            {inspecting === 'header' ? 'Hide Header' : 'Inspect Header'}
+          </button>
+          <button
+            type="button"
+            className="inspector-toggle"
             disabled={geojson === null}
             aria-expanded={inspecting === 'geojson'}
             aria-controls="inspector-panel"
@@ -249,6 +267,19 @@ export default function App() {
           >
             {JSON.stringify(inspecting === 'geojson' ? geojson : sampleStyleJson, null, 2)}
           </pre>
+        )}
+        {inspecting === 'header' && header !== null && (
+          <section
+            id="inspector-panel"
+            className="inspector-panel"
+            tabIndex={0}
+            aria-labelledby="header-panel-title"
+          >
+            <h2 id="header-panel-title" className="header-panel-title">Parsed header content</h2>
+            <div className="header-tree">
+              <HeaderTree value={header} />
+            </div>
+          </section>
         )}
       </div>
     </main>
