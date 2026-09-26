@@ -2,6 +2,7 @@ package main
 
 import (
 	"GeoFlatpack/convert"
+	"GeoFlatpack/fgb"
 	"GeoFlatpack/validate"
 	"flag"
 	"fmt"
@@ -14,6 +15,7 @@ func main() {
 	inputFile := flag.String("i", "", "Path to the input file")
 	outputDir := flag.String("o", ".", "Path to the output directory")
 	formatFlag := flag.String("f", string(validate.FormatMapLibre), "Output format: maplibre or sld")
+	verbose := flag.Bool("v", false, "Verbose output")
 
 	flag.Usage = func() {
 		_, _ = fmt.Fprintln(os.Stderr, "Usage gfp -i <input file> -f <stylesheet format> -o <output directory>")
@@ -41,47 +43,60 @@ func main() {
 
 	name := strings.TrimSuffix(filepath.Base(*inputFile), filepath.Ext(*inputFile))
 	output := filepath.Join(*outputDir, name+".fgb")
-	fmt.Printf("Converting %s to %s\n", *inputFile, output)
 
-	fgb, err := convert.GmlToFgb(*inputFile)
+	if *verbose {
+		fmt.Println("gfp: converting GML to FlatGeobuf...")
+	}
+
+	memoryFGB, err := convert.GmlToFgb(*inputFile)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to convert GML to FlatGeobuf:", err)
 
 		os.Exit(1)
 	}
-
-	/*	for _, layer := range fgb.Dataset.Layers() {
-		fmt.Println("Layer:", layer.Name())
-
-		feature := layer.NextFeature()
-		if feature == nil {
-			fmt.Println("  No features")
-			continue
-		}
-
-		for name, field := range feature.Fields() {
-			fmt.Printf("  %s = %s (type: %v)\n",
-				name, field.String(), field.Type())
-		}
-
-		if geometry := feature.Geometry(); geometry != nil {
-			fmt.Println("  Geometry:", geometry.Name())
-		}
-
-		feature.Close()
-		layer.ResetReading()
-	} */
-
 	defer func(fgb *convert.MemoryFGB) {
 		err := fgb.Close()
 		if err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to close FlatGeobuf:", err)
 		}
-	}(fgb)
+	}(memoryFGB)
 
-	err = convert.WriteFgb(fgb, output)
+	if *verbose {
+		fmt.Println("gfp: successfully converted GML to FlatGeobuf in vsimem")
+		fmt.Println("\ngfp: exposing reader...")
+	}
+
+	src, err := memoryFGB.OpenReader()
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to open FlatGeobuf:", err)
+		os.Exit(1)
+	}
+
+	if *verbose {
+		fmt.Println("gfp: reader exposed successfully")
+		fmt.Println("\ngfp: loading FlatGeobuf...")
+	}
+
+	LoadedFgb, err := fgb.LoadFgb(src)
+	if err != nil {
+		return
+	}
+
+	if *verbose {
+		fmt.Println("gfp: successfully loaded FlatGeobuf into memory")
+		fmt.Println("\ngfp: inspecting FlatGeobuf...")
+		s := strings.TrimSuffix(fgb.InspectFgb(LoadedFgb), "\n")
+		fmt.Printf("\t%s\n", strings.ReplaceAll(s, "\n", "\n\t"))
+		fmt.Println("\ngfp: writing FlatGeobuf to", output, "...")
+	}
+
+	err = convert.WriteFgb(memoryFGB, output)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to write FlatGeobuf:", err)
 		os.Exit(1)
+	}
+
+	if *verbose {
+		fmt.Println("gfp: FlatGeobuf written to", output)
 	}
 }

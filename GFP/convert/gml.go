@@ -96,3 +96,7 @@ func (fgb *MemoryFGB) Close() error {
 		godal.VSIUnlink(fgb.path),
 	)
 }
+
+func (fgb *MemoryFGB) OpenReader() (io.ReadCloser, error) {
+	return godal.VSIOpen(fgb.path)
+}
