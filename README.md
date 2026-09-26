@@ -26,11 +26,23 @@ Then run it:
 | `-o`     | Path to the output directory             | `.`        |
 | `-f`     | Stylesheet format: `maplibre` or `sld`   | `maplibre` |
 | `-h`     | Show help                                | —          |
+| `-v`     | Verbose output                           | —          |
 
 The output path is `<output-directory>/<input-name>.gfp`. For example, `map.gml` produces `map.gfp` in the chosen output directory.
 
+## Dependencies
+
+| Module                          | Version                 | Purpose                                                          |
+|---------------------------------|-------------------------|------------------------------------------------------------------|
+| `github.com/airbusgeo/godal`    | `v0.0.18`               | Provides GDAL access for GML conversion and FlatGeobuf handling. |
+| `github.com/gogama/flatgeobuf`  | `v1.0.1`                | Reads and parses FlatGeobuf data.                                |
+| `github.com/google/flatbuffers` | `v23.5.26+incompatible` | Underlying serialization dependency used by FlatGeobuf.          |
+
+
 ## Development status
 
-- [ ] Convert GML to FGB
+- [x] Convert GML to FGB
+- [x] Load FGB into memory
+- [x] Parse FGB
 - [ ] Generate MapLibre stylesheet
 - [ ] Symbology support
