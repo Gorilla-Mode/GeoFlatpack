@@ -29,9 +29,17 @@ body {
   pointer-events: none;
 }
 
-.geojson-toggle,
+.inspector-controls {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.inspector-toggle,
 .map-status,
-.geojson-panel {
+.inspector-panel {
   box-sizing: border-box;
   pointer-events: auto;
   border-radius: 6px;
@@ -40,7 +48,7 @@ body {
   box-shadow: 0 1px 6px #0003;
 }
 
-.geojson-toggle {
+.inspector-toggle {
   flex-shrink: 0;
   max-width: 100%;
   padding: 10px 14px;
@@ -49,7 +57,7 @@ body {
   cursor: pointer;
 }
 
-.geojson-toggle:disabled {
+.inspector-toggle:disabled {
   color: #64748b;
   cursor: default;
 }
@@ -61,7 +69,7 @@ body {
   font-size: 14px;
 }
 
-.geojson-panel {
+.inspector-panel {
   width: 100%;
   min-height: 0;
   margin: 0;

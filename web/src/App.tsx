@@ -19,7 +19,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
-  const [inspecting, setInspecting] = useState(false);
+  const [inspecting, setInspecting] = useState<'geojson' | 'style' | null>(null);
 
   useEffect(() => {
     if (!container.current) return;
@@ -95,24 +95,41 @@ export default function App() {
     <main>
       <div ref={container} className="map" aria-label="Map of sample obstacles in Oslo" />
       <div className="map-overlay">
-        <button
-          type="button"
-          className="geojson-toggle"
-          disabled={geojson === null}
-          aria-expanded={inspecting}
-          aria-controls="geojson-panel"
-          onClick={() => setInspecting((open) => !open)}
-        >
-          {inspecting ? 'Hide GeoJSON' : 'Inspect GeoJSON'}
-        </button>
+        <div className="inspector-controls">
+          <button
+            type="button"
+            className="inspector-toggle"
+            disabled={geojson === null}
+            aria-expanded={inspecting === 'geojson'}
+            aria-controls="inspector-panel"
+            onClick={() => setInspecting((active) => active === 'geojson' ? null : 'geojson')}
+          >
+            {inspecting === 'geojson' ? 'Hide GeoJSON' : 'Inspect GeoJSON'}
+          </button>
+          <button
+            type="button"
+            className="inspector-toggle"
+            aria-expanded={inspecting === 'style'}
+            aria-controls="inspector-panel"
+            onClick={() => setInspecting((active) => active === 'style' ? null : 'style')}
+          >
+            {inspecting === 'style' ? 'Hide Map Style' : 'Inspect Map Style'}
+          </button>
+        </div>
         {(loading || error) && (
           <div className="map-status" role={error ? 'alert' : 'status'}>
             {error ?? 'Loading map and sample obstacles…'}
           </div>
         )}
-        {inspecting && geojson !== null && (
-          <pre id="geojson-panel" className="geojson-panel" tabIndex={0} aria-label="Decoded GeoJSON">
-            {JSON.stringify(geojson, null, 2)}
+        {(inspecting === 'style' || (inspecting === 'geojson' && geojson !== null)) && (
+          <pre
+            key={inspecting}
+            id="inspector-panel"
+            className="inspector-panel"
+            tabIndex={0}
+            aria-label={inspecting === 'geojson' ? 'Decoded GeoJSON' : 'Map style JSON source'}
+          >
+            {JSON.stringify(inspecting === 'geojson' ? geojson : sampleStyleJson, null, 2)}
           </pre>
         )}
       </div>
