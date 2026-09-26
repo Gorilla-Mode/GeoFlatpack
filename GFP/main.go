@@ -18,10 +18,7 @@ func main() {
 	formatFlag := flag.String("f", string(validate.FormatMapLibre), "Output format: maplibre or sld")
 
 	flag.Usage = func() {
-		_, err := fmt.Fprintln(os.Stderr, "Usage gfp -i <input file> -f <stylesheet format> -o <output directory>")
-		if err != nil {
-			return
-		}
+		_, _ = fmt.Fprintln(os.Stderr, "Usage gfp -i <input file> -f <stylesheet format> -o <output directory>")
 
 		flag.PrintDefaults()
 	}
@@ -33,18 +30,14 @@ func main() {
 	}
 
 	if err := validate.Gml(*inputFile); err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "gfp:", err)
-		if err != nil {
-			return
-		}
+		_, _ = fmt.Fprintln(os.Stderr, "gfp:", err)
+
 		os.Exit(1)
 	}
 
 	if err := validate.Format(validate.StyleFormat(*formatFlag)); err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "gfp:", err)
-		if err != nil {
-			return
-		}
+		_, _ = fmt.Fprintln(os.Stderr, "gfp:", err)
+
 		os.Exit(1)
 	}
 
@@ -54,10 +47,8 @@ func main() {
 
 	fgb, err := convert.GmlToFgb(*inputFile)
 	if err != nil {
-		_, err := fmt.Fprintln(os.Stderr, "gfp: failed to convert GML to FlatGeobuf:", err)
-		if err != nil {
-			return
-		}
+		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to convert GML to FlatGeobuf:", err)
+
 		os.Exit(1)
 	}
 	defer func(fgb *godal.Dataset, opts ...godal.CloseOption) {
