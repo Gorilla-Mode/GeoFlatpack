@@ -14,6 +14,7 @@ func main() {
 	inputFile := flag.String("i", "", "Path to the input file")
 	outputDir := flag.String("o", ".", "Path to the output directory")
 	formatFlag := flag.String("f", string(validate.FormatMapLibre), "Output format: maplibre or sld")
+	verbose := flag.Bool("v", false, "Verbose output")
 
 	flag.Usage = func() {
 		_, _ = fmt.Fprintln(os.Stderr, "Usage gfp -i <input file> -f <stylesheet format> -o <output directory>")
@@ -50,27 +51,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	/*	for _, layer := range fgb.Dataset.Layers() {
-		fmt.Println("Layer:", layer.Name())
-
-		feature := layer.NextFeature()
-		if feature == nil {
-			fmt.Println("  No features")
-			continue
-		}
-
-		for name, field := range feature.Fields() {
-			fmt.Printf("  %s = %s (type: %v)\n",
-				name, field.String(), field.Type())
-		}
-
-		if geometry := feature.Geometry(); geometry != nil {
-			fmt.Println("  Geometry:", geometry.Name())
-		}
-
-		feature.Close()
-		layer.ResetReading()
-	} */
+	if *verbose {
+		convert.PrintFgb(fgb)
+	}
 
 	defer func(fgb *convert.MemoryFGB) {
 		err := fgb.Close()
