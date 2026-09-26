@@ -8,8 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/airbusgeo/godal"
 )
 
 func main() {
@@ -51,8 +49,34 @@ func main() {
 
 		os.Exit(1)
 	}
-	defer func(fgb *godal.Dataset, opts ...godal.CloseOption) {
-		_ = fgb.Close(opts...)
+
+	/*	for _, layer := range fgb.Dataset.Layers() {
+		fmt.Println("Layer:", layer.Name())
+
+		feature := layer.NextFeature()
+		if feature == nil {
+			fmt.Println("  No features")
+			continue
+		}
+
+		for name, field := range feature.Fields() {
+			fmt.Printf("  %s = %s (type: %v)\n",
+				name, field.String(), field.Type())
+		}
+
+		if geometry := feature.Geometry(); geometry != nil {
+			fmt.Println("  Geometry:", geometry.Name())
+		}
+
+		feature.Close()
+		layer.ResetReading()
+	} */
+
+	defer func(fgb *convert.MemoryFGB) {
+		err := fgb.Close()
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to close FlatGeobuf:", err)
+		}
 	}(fgb)
 
 	err = convert.WriteFgb(fgb, output)
