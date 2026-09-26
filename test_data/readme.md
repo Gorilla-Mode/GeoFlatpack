@@ -1,6 +1,6 @@
 # Test data
 
-This directory contains sample data for testing the web app, which is not yet available.
+This directory contains sample data for testing the [web app](../web/README.md).
 
 ## Files
 
