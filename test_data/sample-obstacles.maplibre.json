@@ -1,0 +1,57 @@
+{
+  "version": 8,
+  "name": "GeoFlatpack sample obstacles",
+  "center": [10.7489, 59.9126],
+  "zoom": 15,
+  "sources": {
+    "obstacles": {
+      "type": "geojson",
+      "data": {
+        "type": "FeatureCollection",
+        "features": []
+      }
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#f8fafc"
+      }
+    },
+    {
+      "id": "buildings",
+      "type": "fill",
+      "source": "obstacles",
+      "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "kind"], "building"]],
+      "paint": {
+        "fill-color": "#2563eb",
+        "fill-opacity": 0.55,
+        "fill-outline-color": "#1e3a8a"
+      }
+    },
+    {
+      "id": "power-lines",
+      "type": "line",
+      "source": "obstacles",
+      "filter": ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "kind"], "power_line"]],
+      "paint": {
+        "line-color": "#dc2626",
+        "line-width": 5
+      }
+    },
+    {
+      "id": "street-lights",
+      "type": "circle",
+      "source": "obstacles",
+      "filter": ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "kind"], "street_light"]],
+      "paint": {
+        "circle-color": "#f59e0b",
+        "circle-radius": 9,
+        "circle-stroke-color": "#78350f",
+        "circle-stroke-width": 2
+      }
+    }
+  ]
+}
