@@ -85,12 +85,18 @@ func main() {
 	if *verbose {
 		fmt.Println("gfp: successfully loaded FlatGeobuf into memory")
 		fmt.Println("\ngfp: inspecting FlatGeobuf...")
-		fgb.InspectFgb(LoadedFgb)
+		s := strings.TrimSuffix(fgb.InspectFgb(LoadedFgb), "\n")
+		fmt.Printf("\t%s\n", strings.ReplaceAll(s, "\n", "\n\t"))
+		fmt.Println("\ngfp: writing FlatGeobuf to", output, "...")
 	}
 
 	err = convert.WriteFgb(memoryFGB, output)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to write FlatGeobuf:", err)
 		os.Exit(1)
+	}
+
+	if *verbose {
+		fmt.Println("gfp: FlatGeobuf written to", output)
 	}
 }
