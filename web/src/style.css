@@ -80,3 +80,25 @@ body {
   font-size: 13px;
   line-height: 1.5;
 }
+
+.obstacle-popup .maplibregl-popup-content {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 6px;
+  color: #1e293b;
+}
+
+.obstacle-popup-title {
+  margin: 0 20px 10px 0;
+  font: 600 14px system-ui, sans-serif;
+}
+
+.obstacle-properties {
+  max-height: min(320px, 50dvh);
+  margin: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}

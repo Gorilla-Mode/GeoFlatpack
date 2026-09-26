@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Map, NavigationControl, setWorkerUrl } from 'maplibre-gl';
-import type { StyleSpecification } from 'maplibre-gl';
+import { Map, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl';
+import type { MapMouseEvent, StyleSpecification } from 'maplibre-gl';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { deserialize } from 'flatgeobuf/lib/mjs/geojson.js';
 import type { FeatureCollection } from 'geojson';
@@ -44,6 +44,12 @@ export default function App() {
     }
 
     map.addControl(new NavigationControl(), 'top-right');
+    const popup = new Popup({
+      className: 'obstacle-popup',
+      closeOnClick: false,
+      maxWidth: 'min(360px, calc(100vw - 48px))',
+    });
+    let removeObstacleInteractions = () => {};
     map.on('error', () => {
       if (!controller.signal.aborted) {
         setError('Some map resources could not be loaded. Check your connection and reload.');
@@ -69,12 +75,59 @@ export default function App() {
         if (controller.signal.aborted) return;
 
         map.addSource(sourceId, { type: 'geojson', data });
+        const obstacleLayerIds: string[] = [];
         // The sample background would hide the street basemap.
         for (const layer of sampleStyle.layers) {
           if ('source' in layer && layer.source === 'obstacles') {
             map.addLayer({ ...layer, id: `geoflatpack-${layer.id}`, source: sourceId });
+            obstacleLayerIds.push(`geoflatpack-${layer.id}`);
           }
         }
+
+        function findObstacle(event: MapMouseEvent) {
+          const { x, y } = event.point;
+          const hit = map.queryRenderedFeatures(
+            [[x - 4, y - 4], [x + 4, y + 4]],
+            { layers: obstacleLayerIds },
+          )[0];
+          return hit && data.features.find((feature) => feature.id === hit.id);
+        }
+
+        function showObstacle(event: MapMouseEvent) {
+          popup.remove();
+          const feature = findObstacle(event);
+          if (!feature) return;
+
+          const content = document.createElement('div');
+          const title = document.createElement('h2');
+          title.className = 'obstacle-popup-title';
+          title.textContent = 'Obstacle properties';
+          const properties = document.createElement('pre');
+          properties.className = 'obstacle-properties';
+          properties.tabIndex = 0;
+          properties.setAttribute('aria-label', 'Obstacle properties');
+          properties.textContent = JSON.stringify(feature.properties, null, 2);
+          content.append(title, properties);
+          popup.setLngLat(event.lngLat).setDOMContent(content).addTo(map);
+        }
+
+        function updateCursor(event: MapMouseEvent) {
+          map.getCanvas().style.cursor = findObstacle(event) ? 'pointer' : '';
+        }
+
+        function resetCursor() {
+          map.getCanvas().style.cursor = '';
+        }
+
+        map.on('click', showObstacle);
+        map.on('mousemove', updateCursor);
+        map.getCanvas().addEventListener('mouseleave', resetCursor);
+        removeObstacleInteractions = () => {
+          map.off('click', showObstacle);
+          map.off('mousemove', updateCursor);
+          map.getCanvas().removeEventListener('mouseleave', resetCursor);
+          resetCursor();
+        };
         setLoading(false);
       } catch (cause) {
         if (controller.signal.aborted) return;
@@ -87,6 +140,8 @@ export default function App() {
     void loadSample();
     return () => {
       controller.abort();
+      removeObstacleInteractions();
+      popup.remove();
       map.remove();
     };
   }, []);
