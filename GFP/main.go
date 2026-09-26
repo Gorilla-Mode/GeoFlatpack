@@ -12,8 +12,10 @@ import (
 )
 
 func main() {
+	//region Flag parsing
+
 	inputFile := flag.String("i", "", "Path to the input file")
-	outputDir := flag.String("o", ".", "Path to the output directory")
+	outputDir := flag.String("o", "", "Path to the output directory")
 	formatFlag := flag.String("f", string(validate.FormatMapLibre), "Output format: maplibre or sld")
 	verbose := flag.Bool("v", false, "Verbose output")
 
@@ -42,11 +44,29 @@ func main() {
 	}
 
 	name := strings.TrimSuffix(filepath.Base(*inputFile), filepath.Ext(*inputFile))
-	output := filepath.Join(*outputDir, name+".fgb")
+	output := *outputDir
+
+	info, err := os.Stat(output)
+	if err != nil && !os.IsNotExist(err) {
+		_, _ = fmt.Fprintln(os.Stderr, "gfp:", err)
+	}
+
+	if output == "." || strings.HasSuffix(output, string(os.PathSeparator)) ||
+		(err == nil && info.IsDir()) {
+		output = filepath.Join(output, name+".fgb")
+	} else if filepath.Ext(output) == "" {
+		output += ".fgb"
+	}
+
+	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "gfp:", err)
+	}
 
 	if *verbose {
 		fmt.Println("gfp: converting GML to FlatGeobuf...")
 	}
+
+	//endregion
 
 	memoryFGB, err := convert.GmlToFgb(*inputFile)
 	if err != nil {
