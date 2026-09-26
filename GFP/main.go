@@ -1,6 +1,7 @@
 package main
 
 import (
+	"GeoFlatpack/convert"
 	"GeoFlatpack/validate"
 	"flag"
 	"fmt"
@@ -11,7 +12,7 @@ import (
 
 func main() {
 	inputFile := flag.String("i", "", "Path to the input file")
-	outputDir := flag.String("o", "", "Path to the output directory")
+	outputDir := flag.String("o", ".", "Path to the output directory")
 	formatFlag := flag.String("f", string(validate.FormatMapLibre), "Output format: maplibre or sld")
 
 	flag.Usage = func() {
@@ -46,6 +47,15 @@ func main() {
 	}
 
 	name := strings.TrimSuffix(filepath.Base(*inputFile), filepath.Ext(*inputFile))
-	output := filepath.Join(*outputDir, name+".gfp")
+	output := filepath.Join(*outputDir, name+".fgb")
 	fmt.Printf("Converting %s to %s\n", *inputFile, output)
+
+	err := convert.GmlToFgb(*inputFile, output)
+	if err != nil {
+		_, err := fmt.Fprintln(os.Stderr, "gfp: failed to convert GML to FlatGeobuf:", err)
+		if err != nil {
+			return
+		}
+		os.Exit(1)
+	}
 }
