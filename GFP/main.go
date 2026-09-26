@@ -43,7 +43,10 @@ func main() {
 
 	name := strings.TrimSuffix(filepath.Base(*inputFile), filepath.Ext(*inputFile))
 	output := filepath.Join(*outputDir, name+".fgb")
-	fmt.Printf("Converting %s to %s\n", *inputFile, output)
+
+	if *verbose {
+		fmt.Println("gfp: converting GML to FlatGeobuf...")
+	}
 
 	memoryFGB, err := convert.GmlToFgb(*inputFile)
 	if err != nil {
@@ -51,7 +54,6 @@ func main() {
 
 		os.Exit(1)
 	}
-
 	defer func(fgb *convert.MemoryFGB) {
 		err := fgb.Close()
 		if err != nil {
@@ -59,10 +61,20 @@ func main() {
 		}
 	}(memoryFGB)
 
+	if *verbose {
+		fmt.Println("gfp: successfully converted GML to FlatGeobuf in vsimem")
+		fmt.Println("\ngfp: exposing reader...")
+	}
+
 	src, err := memoryFGB.OpenReader()
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to open FlatGeobuf:", err)
 		os.Exit(1)
+	}
+
+	if *verbose {
+		fmt.Println("gfp: reader exposed successfully")
+		fmt.Println("\ngfp: loading FlatGeobuf...")
 	}
 
 	LoadedFgb, err := fgb.LoadFgb(src)
@@ -71,6 +83,8 @@ func main() {
 	}
 
 	if *verbose {
+		fmt.Println("gfp: successfully loaded FlatGeobuf into memory")
+		fmt.Println("\ngfp: inspecting FlatGeobuf...")
 		fgb.InspectFgb(LoadedFgb)
 	}
 
