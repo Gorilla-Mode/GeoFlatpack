@@ -52,7 +52,11 @@ func main() {
 	}
 
 	if *verbose {
-		convert.PrintFgb(fgb)
+		err := convert.PrintFgb(fgb)
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to print FlatGeobuf:", err)
+			return
+		}
 	}
 
 	defer func(fgb *convert.MemoryFGB) {
