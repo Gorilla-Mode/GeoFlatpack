@@ -21,16 +21,16 @@ Then run it:
 ./GeoFlatpack -i path/to/map.gml -o path/to/output/ -f maplibre
 ```
 
-| Argument        | Description                                                            | Default    |
-|-----------------|------------------------------------------------------------------------|------------|
-| `-i`            | Path to the input `.gml` file (required)                               | —          |
-| `-o`            | Output file path or directory (use a trailing `/` for a new directory) | empty      |
-| `-f`            | Stylesheet format: `maplibre` or `sld`                                 | `maplibre` |
-| `-h`            | Show help                                                              | —          |
-| `-v`            | Verbose output                                                         | —          |
-| `--write-fgb`   | Write the FlatGeobuf output file                                       | `true`     |
-| `--write-style` | Write the generated stylesheet output file                             | `true`     |
-| `--force-epsg:4326` | Reproject coordinates and CRS metadata to EPSG:4326                  | `true`     |
+| Argument            | Description                                                            | Default    |
+|---------------------|------------------------------------------------------------------------|------------|
+| `-i`                | Path to the input `.gml` file (required)                               | —          |
+| `-o`                | Output file path or directory (use a trailing `/` for a new directory) | empty      |
+| `-f`                | Stylesheet format: `maplibre` or `sld`                                 | `maplibre` |
+| `-h`                | Show help                                                              | —          |
+| `-v`                | Verbose output                                                         | —          |
+| `--write-fgb`       | Write the FlatGeobuf output file                                       | `true`     |
+| `--write-style`     | Write the generated stylesheet output file                             | `true`     |
+| `--force-epsg:4326` | Reproject coordinates and CRS metadata to EPSG:4326                    | `true`     |
 
 Disable either output with a boolean flag:
 
