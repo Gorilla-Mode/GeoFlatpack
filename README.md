@@ -8,6 +8,8 @@ GeoFlatpack is a tool for converting `.gml` files into a FlatGeobuf file. With a
 
 ## Usage
 
+### Compile
+
 From the repository root, compile the CLI:
 
 ```zsh
@@ -21,16 +23,18 @@ Then run it:
 ./GeoFlatpack -i path/to/map.gml -o path/to/output/ -f maplibre
 ```
 
-| Argument            | Description                                                            | Default    |
-|---------------------|------------------------------------------------------------------------|------------|
-| `-i`                | Path to the input `.gml` file (required)                               | —          |
-| `-o`                | Output file path or directory (use a trailing `/` for a new directory) | empty      |
-| `-f`                | Stylesheet format: `maplibre` or `sld`                                 | `maplibre` |
-| `-h`                | Show help                                                              | —          |
-| `-v`                | Verbose output                                                         | —          |
-| `--write-fgb`       | Write the FlatGeobuf output file                                       | `true`     |
-| `--write-style`     | Write the generated stylesheet output file                             | `true`     |
-| `--force-epsg:4326` | Reproject coordinates and CRS metadata to EPSG:4326                    | `true`     |
+### Flags
+
+| Argument            | Description                                                            | Default    | Required? |
+|---------------------|------------------------------------------------------------------------|------------|-----------|
+| `-i`                | Path to the input `.gml` file                                          | —          | Yes       |
+| `-o`                | Output file path or directory (use a trailing `/` for a new directory) | `./`       | No        |
+| `-f`                | Stylesheet format: `maplibre` or `sld`                                 | `maplibre` | No        |
+| `-h`                | Show help                                                              | `false`    | No        |
+| `-v`                | Verbose output                                                         | `false`    | No        |
+| `--write-fgb`       | Write the FlatGeobuf output file                                       | `true`     | No        |
+| `--write-style`     | Write the generated stylesheet output file                             | `true`     | No        |
+| `--force-epsg:4326` | Reproject coordinates and CRS metadata to EPSG:4326                    | `true`     | No        |
 
 Disable either output with a boolean flag:
 
@@ -79,5 +83,6 @@ The `web/` directory contains a browser-based MapLibre example. See the [web REA
 - [x] Parse FGB
 - [x] Web demo
 - [x] Generate MapLibre stylesheet
-- [ ] User input for maplibre stylesheet
+- [x] Cli user input for maplibre stylesheet
+- [x] Tui user input for maplibre stylesheet
 - [ ] Symbology support

@@ -19,7 +19,7 @@ func main() {
 	//region Flag parsing
 
 	inputFile := flag.String("i", "", "Path to the input file")
-	outputDir := flag.String("o", "", "Path to the output directory")
+	outputDir := flag.String("o", "./", "Path to the output directory")
 	formatFlag := flag.String("f", string(validate.FormatMapLibre), "Output format: maplibre or sld")
 	verbose := flag.Bool("v", false, "Verbose output")
 	writeFgb := flag.Bool("write-fgb", true, "Write the FlatGeobuf output file")
