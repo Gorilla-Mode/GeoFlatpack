@@ -123,9 +123,9 @@ func main() {
 	}
 
 	style, err := maplibre.BuildMapLibreStyle(
-		LoadedFgb, "obstacles.fgb", "obstacles", "kind", maplibre.TestPaints,
+		LoadedFgb, filepath.Base(output), "", "kind", maplibre.TestPaints,
 	)
-	
+
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to build MapLibre style:", err)
 		os.Exit(1)
@@ -137,5 +137,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	_ = os.WriteFile("obstacles_generated.json", styleJSON, 0644)
+	styleOutput := strings.TrimSuffix(output, filepath.Ext(output)) + ".gen.maplibre.json"
+	if err := os.WriteFile(styleOutput, styleJSON, 0644); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to write MapLibre style:", err)
+		os.Exit(1)
+	}
+
+	if *verbose {
+		fmt.Println("gfp: MapLibre style written to", styleOutput)
+	}
 }
