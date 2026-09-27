@@ -7,52 +7,108 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/airbusgeo/godal"
 )
 
+// MemoryFGB owns one GDAL dataset and its virtual file. Call Close after use.
 type MemoryFGB struct {
-	Dataset *godal.Dataset // Opened for inspecting the finished FGB
-	path    string         // Its /vsimem/ path
+	LayerName string
+	Dataset   *godal.Dataset
+	// ListColumns records source list fields whose output values are JSON arrays.
+	ListColumns []string
+	path        string
 }
 
-func GmlToFgb(input string, forceEPSG4326 bool, skipFailures bool) (*MemoryFGB, error) {
+// GmlToFgb converts each input layer independently, preserving GDAL layer order.
+// The caller owns every returned MemoryFGB; failures release partial results.
+func GmlToFgb(input string, forceEPSG4326 bool, skipFailures bool) (files []*MemoryFGB, err error) {
 	godal.RegisterAll()
-
-	src, err := godal.Open(input,
-		godal.VectorOnly(),
-		godal.DriverOpenOption("WRITE_GFS=NO"),
-	)
+	src, err := godal.Open(input, godal.VectorOnly(), godal.DriverOpenOption("WRITE_GFS=NO"))
 	if err != nil {
 		return nil, fmt.Errorf("open GML: %w", err)
 	}
-	defer func() { _ = src.Close() }()
+	defer func() {
+		if closeErr := src.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close GML: %w", closeErr))
+			for _, file := range files {
+				err = errors.Join(err, file.Close())
+			}
+			files = nil
+		}
+	}()
 
 	var id [16]byte
 	if _, err := rand.Read(id[:]); err != nil {
 		return nil, err
 	}
-	path := fmt.Sprintf("/vsimem/gfp-%x.fgb", id[:])
+	return convertLayers(src, fmt.Sprintf("/vsimem/gfp-%x", id[:]), forceEPSG4326, skipFailures)
+}
 
-	// Remove the virtual file if conversion or reopening fails.
+func convertLayers(src *godal.Dataset, prefix string, forceEPSG4326, skipFailures bool) (files []*MemoryFGB, err error) {
+	layers := src.Layers()
+	if len(layers) == 0 {
+		return nil, fmt.Errorf("input has no layers")
+	}
+	defer func() {
+		if err != nil {
+			for _, file := range files {
+				err = errors.Join(err, file.Close())
+			}
+			files = nil
+		}
+	}()
+	for i, layer := range layers {
+		listColumns, schemaErr := layerListColumns(layer)
+		if schemaErr != nil {
+			return files, fmt.Errorf("layer %q schema: %w", layer.Name(), schemaErr)
+		}
+		file, convertErr := convertLayer(src, layer.Name(), fmt.Sprintf("%s-%d.fgb", prefix, i), forceEPSG4326, skipFailures)
+		if convertErr != nil {
+			return files, fmt.Errorf("layer %q: %w", layer.Name(), convertErr)
+		}
+		file.ListColumns = listColumns
+		files = append(files, file)
+	}
+	return files, nil
+}
+
+func layerListColumns(layer godal.Layer) ([]string, error) {
+	// A detached, empty feature exposes the layer definition without reading
+	// any source features. Passing nil geometry does not insert a feature.
+	definition, err := layer.NewFeature(nil)
+	if err != nil {
+		return nil, err
+	}
+	defer definition.Close()
+	var names []string
+	for name, field := range definition.Fields() {
+		switch field.Type() {
+		case godal.FTStringList, godal.FTIntList, godal.FTInt64List, godal.FTRealList:
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func convertLayer(src *godal.Dataset, name, path string, forceEPSG4326, skipFailures bool) (*MemoryFGB, error) {
 	keep := false
 	defer func() {
 		if !keep {
 			_ = godal.VSIUnlink(path)
 		}
 	}()
-
-	args := []string{
-		"-f", "FlatGeobuf",
-		"-lco", "TEMPORARY_DIR=/vsimem/",
-	}
+	args := []string{"-f", "FlatGeobuf", "-lco", "TEMPORARY_DIR=/vsimem/",
+		"-mapFieldType", "StringList=String(JSON),IntegerList=String(JSON),Integer64List=String(JSON),RealList=String(JSON)"}
 	if forceEPSG4326 {
 		args = append(args, "-t_srs", "EPSG:4326")
 	}
 	if skipFailures {
 		args = append(args, "-skipfailures")
 	}
-
+	args = append(args, name)
 	dst, err := src.VectorTranslate(path, args)
 	if err != nil {
 		if dst != nil {
@@ -63,18 +119,16 @@ func GmlToFgb(input string, forceEPSG4326 bool, skipFailures bool) (*MemoryFGB, 
 	if err := dst.Close(); err != nil {
 		return nil, fmt.Errorf("finish FGB: %w", err)
 	}
-
-	fgb, err := godal.Open(path, godal.VectorOnly())
+	dataset, err := godal.Open(path, godal.VectorOnly())
 	if err != nil {
 		return nil, fmt.Errorf("reopen FGB: %w", err)
 	}
-
 	keep = true
-	return &MemoryFGB{Dataset: fgb, path: path}, nil
+	return &MemoryFGB{LayerName: name, Dataset: dataset, path: path}, nil
 }
 
 func WriteFgb(fgb *MemoryFGB, output string) error {
-	src, err := godal.VSIOpen(fgb.path)
+	src, err := fgb.OpenReader()
 	if err != nil {
 		return fmt.Errorf("open in-memory FGB: %w", err)
 	}
@@ -99,12 +153,17 @@ func WriteFgb(fgb *MemoryFGB, output string) error {
 }
 
 func (fgb *MemoryFGB) Close() error {
-	return errors.Join(
-		fgb.Dataset.Close(),
-		godal.VSIUnlink(fgb.path),
-	)
-}
-
-func (fgb *MemoryFGB) OpenReader() (io.ReadCloser, error) {
-	return godal.VSIOpen(fgb.path)
+	var err error
+	if fgb.Dataset != nil {
+		err = fgb.Dataset.Close()
+		fgb.Dataset = nil
+	}
+	if fgb.path != "" {
+		err = errors.Join(err, godal.VSIUnlink(fgb.path))
+		fgb.path = ""
+	}
+	if err != nil {
+		return fmt.Errorf("close layer %q: %w", fgb.LayerName, err)
+	}
+	return nil
 }

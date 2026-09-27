@@ -1,7 +1,6 @@
 package fgb
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -50,16 +49,11 @@ func buildFGB(rawFgb RawFgb) (*Fgb, error) {
 				schema = &rawFgb.Features[i]
 			}
 
-			values, err := flatgeobuf.NewPropReader(
-				bytes.NewReader(rawFgb.Features[i].PropertiesBytes()),
-			).ReadSchema(schema)
+			values, err := readProperties(rawFgb.Features[i].PropertiesBytes(), schema)
 			if err != nil {
-				return nil, fmt.Errorf("feature %d properties: %w", i, err)
+				return nil, fmt.Errorf("feature %d properties: %w", i+1, err)
 			}
-
-			for _, value := range values {
-				props[string(value.Col.Name())] = value.Value
-			}
+			props = values
 		}
 
 		fgb.Features = append(fgb.Features, Feature{
