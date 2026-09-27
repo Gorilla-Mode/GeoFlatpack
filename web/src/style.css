@@ -44,6 +44,7 @@ body {
 .inspector-toggle,
 .map-status,
 .upload-panel,
+.source-panel,
 .inspector-panel {
   box-sizing: border-box;
   pointer-events: auto;
@@ -76,6 +77,7 @@ body {
 }
 
 .inspector-panel,
+.source-panel,
 .upload-panel {
   min-height: 0;
   padding: 14px;
@@ -96,6 +98,34 @@ body {
 .upload-panel {
   width: min(440px, 100%);
   font-size: 14px;
+}
+
+.source-panel {
+  display: grid;
+  gap: 8px;
+  max-width: 100%;
+  font-size: 14px;
+}
+
+.source-panel .inspector-toggle {
+  text-align: left;
+  white-space: normal;
+  box-shadow: none;
+}
+
+.source-panel .inspector-toggle:hover,
+.source-panel .inspector-toggle[aria-pressed='true'] {
+  background: #eff6ff;
+}
+
+.source-panel .inspector-toggle[aria-pressed='true'] {
+  color: #1d4ed8;
+}
+
+.source-retry {
+  display: block;
+  margin-top: 10px;
+  white-space: normal;
 }
 
 .inspector-json {

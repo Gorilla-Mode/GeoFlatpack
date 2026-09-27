@@ -47,10 +47,13 @@ jobs:
         run: |
           shopt -s nullglob
           fgb_assets=(web/dist/assets/sample-obstacles-*.fgb)
+          station_assets=(web/dist/assets/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML-*.fgb)
           css_assets=(web/dist/assets/*.css)
           worker_assets=(web/dist/assets/maplibre-gl-worker-*.js)
           test "${#fgb_assets[@]}" -eq 1
           cmp test_data/sample-obstacles.fgb "${fgb_assets[0]}"
+          test "${#station_assets[@]}" -eq 1
+          cmp test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb "${station_assets[0]}"
           test "${#css_assets[@]}" -gt 0
           test "${#worker_assets[@]}" -gt 0
           for asset in "${css_assets[@]}" "${worker_assets[@]}"; do
