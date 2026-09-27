@@ -7,45 +7,102 @@ import HeaderTree from './HeaderTree';
 import { createInspection } from './inspection';
 import { decodeFgb, getBounds, getSourceName, readDataset } from './dataset';
 import type { Dataset, DatasetHeader } from './dataset';
+import sampleUrl from '../../test_data/sample-obstacles.fgb?url';
 import sampleStyleJson from '../../test_data/sample-obstacles.maplibre.json';
+import stationUrl from '../../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb?url';
+import stationStyleJson from '../../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.gen.maplibre.json';
 
-// Use the original filename, not Vite's hashed asset URL, for source naming.
-const [[samplePath, sampleUrl]] = Object.entries(import.meta.glob<string>(
-  '../../test_data/sample-obstacles.fgb',
-  { eager: true, query: '?url', import: 'default' },
-));
 const sampleStyle = sampleStyleJson as unknown as StyleSpecification;
-const sampleFilename = samplePath.slice(samplePath.lastIndexOf('/') + 1);
+// Use the original filename, not Vite's hashed asset URL, for source naming.
+const bundledSources = [
+  { id: 'obstacles', label: 'Sample obstacles', filename: 'sample-obstacles.fgb', url: sampleUrl, style: sampleStyle },
+  {
+    id: 'stations', label: 'Brannstasjoner',
+    filename: 'Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb',
+    url: stationUrl,
+    style: stationStyleJson as unknown as StyleSpecification,
+  },
+];
+type BundledSource = (typeof bundledSources)[number];
 const inspectors = [
   { key: 'header', label: 'Header', title: 'Parsed header and features' },
   { key: 'geojson', label: 'GeoJSON', title: 'Decoded GeoJSON' },
   { key: 'style', label: 'Map Style', title: 'Map style JSON source' },
 ] as const;
+type ActivePanel = 'upload' | 'source' | (typeof inspectors)[number]['key'] | null;
 const fileFields = { fgb: ['FlatGeobuf file', '.fgb'], style: ['MapLibre stylesheet', '.json,application/json'] } as const;
 setWorkerUrl(mapWorkerUrl);
 
 export default function App() {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
-  const sampleRequest = useRef<AbortController | null>(null);
+  const sourceRequest = useRef<AbortController | null>(null);
   const uploadRequest = useRef(0);
   const uploadButton = useRef<HTMLButtonElement>(null);
-  const [dataset, setDataset] = useState<(Dataset & { autoCenter?: boolean }) | null>(null);
+  const restoreUploadFocus = useRef(false);
+  const sourceButton = useRef<HTMLButtonElement>(null);
+  const sourcePanel = useRef<HTMLDivElement>(null);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
+  const [requestedSource, setRequestedSource] = useState(bundledSources[0]);
+  const [loading, setLoading] = useState(false);
+  const [sourceError, setSourceError] = useState<string | null>(null);
+  const [dataset, setDataset] = useState<(Dataset & { autoCenter?: boolean; builtInId?: string }) | null>(null);
   const [partialHeader, setPartialHeader] = useState<DatasetHeader | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [inspecting, setInspecting] = useState<(typeof inspectors)[number] | null>(null);
-  const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [files, setFiles] = useState<Partial<Record<keyof typeof fileFields, File>>>({});
-  const filename = dataset?.filename ?? sampleFilename;
+  const sourceOpen = activePanel === 'source';
+  const uploadOpen = activePanel === 'upload';
+  const inspecting = inspectors.find(view => view.key === activePanel);
+  const filename = dataset?.filename ?? requestedSource.filename;
   const inspection = useMemo(() => createInspection(dataset ? dataset.header : partialHeader, dataset?.data), [dataset, partialHeader]);
-  const views = { header: inspection, geojson: dataset?.data, style: dataset?.style ?? sampleStyle };
+  const views = { header: inspection, geojson: dataset?.data, style: dataset?.style ?? requestedSource.style };
   const bounds = useMemo(() => dataset && getBounds(dataset.data), [dataset]);
+
+  function togglePanel(panel: Exclude<ActivePanel, null>) {
+    setActivePanel(active => active === panel ? null : panel);
+  }
 
   function centerMap(duration = 0) {
     if (bounds) mapRef.current?.fitBounds(bounds, { padding: 48, maxZoom: 18, duration, bearing: 0, pitch: 0 });
+  }
+
+  async function loadSource(source: BundledSource, autoCenter = true) {
+    sourceRequest.current?.abort();
+    const controller = new AbortController();
+    sourceRequest.current = controller;
+    setRequestedSource(source);
+    setLoading(true);
+    setSourceError(null);
+    setPartialHeader(null);
+    try {
+      const response = await fetch(source.url, { signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const decoded = await decodeFgb(await response.arrayBuffer(), controller.signal, header => {
+        if (!controller.signal.aborted) setPartialHeader(header);
+      });
+      if (controller.signal.aborted) return;
+      setDataset({ filename: source.filename, style: source.style, builtInId: source.id, autoCenter, ...decoded });
+      setError(null);
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        setSourceError(`Unable to load ${source.label} (${cause instanceof Error ? cause.message : cause}). Try again or select another source.`);
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoading(false);
+        sourceRequest.current = null;
+      }
+    }
+  }
+
+  function selectSource(source: BundledSource) {
+    if (uploading) return;
+    setActivePanel(null);
+    sourceButton.current?.focus();
+    void loadSource(source);
   }
 
   async function uploadFiles(event: SubmitEvent<HTMLFormElement>) {
@@ -57,10 +114,14 @@ export default function App() {
     try {
       const next = await readDataset(files.fgb, files.style);
       if (request !== uploadRequest.current) return;
-      sampleRequest.current?.abort();
+      sourceRequest.current?.abort();
+      sourceRequest.current = null;
+      setLoading(false);
+      setSourceError(null);
+      setPartialHeader(null);
       setDataset({ ...next, autoCenter: true });
       setError(null);
-      setUploadOpen(false);
+      restoreUploadFocus.current = true;
     } catch (cause) {
       if (request === uploadRequest.current) setUploadError(cause instanceof Error ? cause.message : 'Unable to load these files.');
     } finally {
@@ -69,38 +130,39 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!uploadOpen && !uploading && dataset?.autoCenter) uploadButton.current?.focus();
-  }, [uploadOpen, uploading, dataset]);
+    if (!uploading && restoreUploadFocus.current) {
+      restoreUploadFocus.current = false;
+      if (activePanel === 'upload') {
+        setActivePanel(null);
+        uploadButton.current?.focus();
+      }
+    }
+  }, [activePanel, uploading]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    sampleRequest.current = controller;
+    if (sourceOpen) {
+      const panel = sourcePanel.current;
+      (panel?.querySelector<HTMLButtonElement>('[aria-pressed="true"]') ?? panel?.querySelector('button'))?.focus();
+    }
+  }, [sourceOpen]);
+
+  useEffect(() => {
     setMapReady(false);
     let map: Map;
     try {
       map = new Map({ container: container.current!, style: 'https://tiles.openfreemap.org/styles/liberty', center: sampleStyle.center, zoom: sampleStyle.zoom });
     } catch {
       setError('Unable to start the map. Check that WebGL is available in your browser.');
-      return () => { controller.abort(); uploadRequest.current++; };
+      return () => { sourceRequest.current?.abort(); uploadRequest.current++; };
     }
     mapRef.current = map;
     map.addControl(new NavigationControl(), 'top-right');
     map.on('load', () => setMapReady(true));
     map.on('error', () => setError('Some map resources could not be loaded. Check your connection and reload.'));
 
-    async function loadSample() {
-      try {
-        const response = await fetch(sampleUrl, { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const decoded = await decodeFgb(await response.arrayBuffer(), controller.signal, setPartialHeader);
-        if (!controller.signal.aborted) setDataset({ filename: sampleFilename, style: sampleStyle, ...decoded });
-      } catch (cause) {
-        if (!controller.signal.aborted) setError(`Unable to display the sample obstacles (${cause instanceof Error ? cause.message : cause}). Try loading the files again.`);
-      }
-    }
-    void loadSample();
+    void loadSource(bundledSources[0], false);
     return () => {
-      controller.abort();
+      sourceRequest.current?.abort();
       uploadRequest.current++;
       map.remove();
       mapRef.current = null;
@@ -171,28 +233,50 @@ export default function App() {
   return (
     <main>
       <div ref={container} className="map" aria-label={`Map of ${filename}`} />
-      <div className="map-overlay">
-        <div className="inspector-controls">
-          <button ref={uploadButton} type="button" className="inspector-toggle" disabled={uploading}
-            aria-expanded={uploadOpen} aria-controls="upload-panel" onClick={() => {
-              setFiles({});
-              setUploadError(null);
-              setUploadOpen(open => !open);
-            }}>
-            Upload files
-          </button>
+      <div className="map-overlay" onKeyDown={event => {
+        if (event.key === 'Escape' && sourceOpen) {
+          event.preventDefault();
+          setActivePanel(null);
+          sourceButton.current?.focus();
+        }
+      }}>
+        <div className="map-toolbar">
+          <div className="inspector-controls">
+            <button ref={uploadButton} type="button" className="inspector-toggle" disabled={uploading}
+              aria-expanded={uploadOpen} aria-controls="upload-panel" onClick={() => {
+                setFiles({});
+                setUploadError(null);
+                togglePanel('upload');
+              }}>
+              Upload files
+            </button>
+            <button ref={sourceButton} type="button" className="inspector-toggle" disabled={uploading}
+              aria-expanded={sourceOpen} aria-controls="source-panel" onClick={() => togglePanel('source')}>
+              Select source
+            </button>
+            {inspectors.map(view => (
+              <button key={view.key} type="button" className="inspector-toggle" disabled={!views[view.key]}
+                aria-expanded={inspecting === view} aria-controls="inspector-panel"
+                onClick={() => togglePanel(view.key)}>
+                {inspecting === view ? 'Hide' : 'Inspect'} {view.label}
+              </button>
+            ))}
+          </div>
           <button type="button" className="inspector-toggle" disabled={!bounds || !mapReady}
             onClick={() => centerMap(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 500)}>
             Center on bbox
           </button>
-          {inspectors.map(view => (
-            <button key={view.key} type="button" className="inspector-toggle" disabled={!views[view.key]}
-              aria-expanded={inspecting === view} aria-controls="inspector-panel"
-              onClick={() => setInspecting(active => active === view ? null : view)}>
-              {inspecting === view ? 'Hide' : 'Inspect'} {view.label}
-            </button>
-          ))}
         </div>
+        {sourceOpen && (
+          <div ref={sourcePanel} id="source-panel" className="source-panel" role="group" aria-label="Select source">
+            {bundledSources.map(source => (
+              <button key={source.id} type="button" className="inspector-toggle" disabled={uploading}
+                aria-pressed={dataset?.builtInId === source.id} onClick={() => selectSource(source)}>
+                {source.label}{dataset?.builtInId === source.id ? ' (current)' : ''}
+              </button>
+            ))}
+          </div>
+        )}
         {uploadOpen && (
           <form id="upload-panel" className="upload-panel" onSubmit={uploadFiles} aria-label="Upload map files">
             <p>Choose a FlatGeobuf file and its MapLibre JSON stylesheet. Files are read locally in your browser.</p>
@@ -216,9 +300,18 @@ export default function App() {
             {uploadError && <p role="alert">{uploadError}</p>}
           </form>
         )}
-        {(!dataset || !mapReady || error) && (
-          <div className="map-status" role={error ? 'alert' : 'status'}>
-            {error ?? `Loading map and ${filename}…`}
+        {(!dataset || !mapReady || error || sourceError || loading) && (
+          <div className="map-status" role={error || sourceError ? 'alert' : 'status'}>
+            {error ?? sourceError ?? (loading ? `Loading ${requestedSource.label}…` : `Loading map and ${filename}…`)}
+            {sourceError && (
+              <button type="button" className="inspector-toggle source-retry" disabled={uploading}
+                onClick={() => {
+                  sourceButton.current?.focus();
+                  void loadSource(requestedSource);
+                }}>
+                Retry {requestedSource.label}
+              </button>
+            )}
           </div>
         )}
         {inspecting && views[inspecting.key] && (

@@ -16,6 +16,10 @@ body {
   inset: 0;
 }
 
+.map .maplibregl-ctrl-top-right {
+  top: 64px;
+}
+
 .map-overlay {
   position: absolute;
   top: 12px;
@@ -24,15 +28,24 @@ body {
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
-  width: calc(100vw - 76px);
+  width: calc(100vw - 24px);
   max-height: calc(100dvh - 24px);
   pointer-events: none;
+}
+
+.map-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-shrink: 0;
+  gap: 12px;
+  width: 100%;
 }
 
 .inspector-controls {
   display: flex;
   flex-wrap: nowrap;
-  flex-shrink: 0;
+  min-width: 0;
   gap: 8px;
   max-width: 100%;
   overflow-x: auto;
@@ -44,6 +57,7 @@ body {
 .inspector-toggle,
 .map-status,
 .upload-panel,
+.source-panel,
 .inspector-panel {
   box-sizing: border-box;
   pointer-events: auto;
@@ -76,8 +90,10 @@ body {
 }
 
 .inspector-panel,
+.source-panel,
 .upload-panel {
   min-height: 0;
+  max-width: calc(100% - 52px);
   padding: 14px;
   overflow: auto;
 }
@@ -96,6 +112,33 @@ body {
 .upload-panel {
   width: min(440px, 100%);
   font-size: 14px;
+}
+
+.source-panel {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.source-panel .inspector-toggle {
+  text-align: left;
+  white-space: normal;
+  box-shadow: none;
+}
+
+.source-panel .inspector-toggle:hover,
+.source-panel .inspector-toggle[aria-pressed='true'] {
+  background: #eff6ff;
+}
+
+.source-panel .inspector-toggle[aria-pressed='true'] {
+  color: #1d4ed8;
+}
+
+.source-retry {
+  display: block;
+  margin-top: 10px;
+  white-space: normal;
 }
 
 .inspector-json {

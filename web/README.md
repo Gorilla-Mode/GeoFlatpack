@@ -29,8 +29,10 @@ Open the URL printed by Vite.
 |---------------------------------------------------------------------------------|------------------------------------------------------|
 | [`sample-obstacles.fgb`](../test_data/sample-obstacles.fgb)                     | Decoded in the browser into a GeoJSON source         |
 | [`sample-obstacles.maplibre.json`](../test_data/sample-obstacles.maplibre.json) | Initial view, obstacle filters, and paint properties |
+| [`Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb`](../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb) | Brannstasjoner data decoded into a GeoJSON source |
+| [`Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.gen.maplibre.json`](../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.gen.maplibre.json) | Generated filters and paint properties for Brannstasjoner |
 
-Imported directly from `test_data/`. Vite bundles the style and copies the FGB into production assets — no manual copying or backend.
+Imported directly from `test_data/`. Vite bundles both styles and copies both FGB files into production assets — no manual copying or backend. Sample obstacles loads initially; source selections are not saved between page loads.
 
 ## Source, uploads, and inspectors
 
@@ -39,6 +41,7 @@ Imported directly from `test_data/`. Vite bundles the style and copies the FGB i
 | **Source name**    | FGB filename without extension, e.g. `sample-obstacles.fgb` → `sample-obstacles`. Must match the stylesheet's `sources` key and each layer's `source`. Update both the import path and stylesheet references when changing files. Asset hashes are separate.                                                                                                                                                                                                         |
 | **CLI output**     | Writes two files per input: `<output>/<input-name>.fgb` and `.gen.maplibre.json`. Default output dir uses the input name, e.g. `map.gml` → `map.fgb` + `map.gen.maplibre.json`. `-o /output/roads.fgb` writes to that dir as `roads.fgb` + `roads.gen.maplibre.json` (source `roads`). `-o .` writes named files to the current dir.                                                                                                                                 |
 | **Upload files**   | Pick a local `.fgb` + matching `.json` stylesheet, then **Display on map** (e.g. `roads.fgb` + `roads.gen.maplibre.json` → `roads`). Both read in the browser. Replaces the sample, centers map on bounds, and updates the header, GeoJSON, and style inspectors. Invalid files or mismatched source names error without removing the current dataset.                                                                                                               |
+| **Select source** | To the right of **Upload files**. Choose **Sample obstacles** or **Brannstasjoner** to load its FGB and matching stylesheet immediately, center the map on its bounds, and update all inspectors. The current source is marked in the panel. Loading failures keep the current dataset visible and offer a retry. Either source can replace an uploaded dataset. Use Tab and Enter/Space to choose, or Escape to close the panel. |
 | **Inspect Header** | Shows the dataset name, readable geometry and field types, feature count, Has Z, index node size, bounds, and CRS, with additional metadata under Details. Includes numbered features in file order with geometry types, nested X/Y coordinates (Z when present), and properties. Expandable tree — focus a branch and press Enter/Space to toggle. Scrolls long values; reopen re-expands all. Shares the panel with **Inspect GeoJSON** and **Inspect Map Style**. |
 
 Only layers using the matching source render above the basemap; stylesheet backgrounds and unrelated sources are skipped. The header button appears once the decoder parses the header — no extra download or basemap wait — and stays available if feature decoding fails, alongside the error.
@@ -53,6 +56,6 @@ URL: https://gorilla-mode.github.io/GeoFlatpack/
 
 Once: repo **Settings → Pages → Source → GitHub Actions** ([docs](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)).
 
-The [workflow](../.github/workflows/deploy-pages.yml) runs on every push to `master`. Also runnable manually from **Actions → Deploy to GitHub Pages → Run workflow** with `master`. Uses Node.js 22, `npm ci`, a TS check, and a build. Before uploading `web/dist` it verifies the emitted FGB matches byte-for-byte and that CSS + MapLibre worker assets exist. Deployments run serially without cancelling active ones. The `github-pages` environment exposes the deployed URL.
+The [workflow](../.github/workflows/deploy-pages.yml) runs on every push to `master`. Also runnable manually from **Actions → Deploy to GitHub Pages → Run workflow** with `master`. Uses Node.js 22, `npm ci`, a TS check, and a build. Before uploading `web/dist` it verifies both emitted FGB files match their sources byte-for-byte and that CSS + MapLibre worker assets exist. Deployments run serially without cancelling active ones. The `github-pages` environment exposes the deployed URL.
 
-Vite paths support the `/GeoFlatpack/` host. The style is bundled into the app; the FGB, CSS, and worker are emitted as assets. The basemap still needs internet.
+Vite paths support the `/GeoFlatpack/` host. Both styles are bundled into the app; the FGB files, CSS, and worker are emitted as assets. The basemap still needs internet.
