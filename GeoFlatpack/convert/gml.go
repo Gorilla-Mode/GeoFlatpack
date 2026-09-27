@@ -16,7 +16,7 @@ type MemoryFGB struct {
 	path    string         // Its /vsimem/ path
 }
 
-func GmlToFgb(input string, forceEPSG4326 bool) (*MemoryFGB, error) {
+func GmlToFgb(input string, forceEPSG4326 bool, skipFailures bool) (*MemoryFGB, error) {
 	godal.RegisterAll()
 
 	src, err := godal.Open(input,
@@ -48,6 +48,9 @@ func GmlToFgb(input string, forceEPSG4326 bool) (*MemoryFGB, error) {
 	}
 	if forceEPSG4326 {
 		args = append(args, "-t_srs", "EPSG:4326")
+	}
+	if skipFailures {
+		args = append(args, "-skipfailures")
 	}
 
 	dst, err := src.VectorTranslate(path, args)
