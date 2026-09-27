@@ -4,7 +4,7 @@
   "center": [10.7489, 59.9126],
   "zoom": 15,
   "sources": {
-    "obstacles": {
+    "sample-obstacles": {
       "type": "geojson",
       "data": {
         "type": "FeatureCollection",
@@ -23,7 +23,7 @@
     {
       "id": "buildings",
       "type": "fill",
-      "source": "obstacles",
+      "source": "sample-obstacles",
       "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "kind"], "building"]],
       "paint": {
         "fill-color": "#2563eb",
@@ -34,7 +34,7 @@
     {
       "id": "power-lines",
       "type": "line",
-      "source": "obstacles",
+      "source": "sample-obstacles",
       "filter": ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "kind"], "power_line"]],
       "paint": {
         "line-color": "#dc2626",
@@ -44,7 +44,7 @@
     {
       "id": "street-lights",
       "type": "circle",
-      "source": "obstacles",
+      "source": "sample-obstacles",
       "filter": ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "kind"], "street_light"]],
       "paint": {
         "circle-color": "#f59e0b",

@@ -7,11 +7,16 @@ import type { HeaderMeta } from 'flatgeobuf/lib/mjs/header-meta.js';
 import type { FeatureCollection } from 'geojson';
 import HeaderTree from './HeaderTree';
 import sampleStyleJson from '../../test_data/sample-obstacles.maplibre.json';
-import sampleUrl from '../../test_data/sample-obstacles.fgb?url';
+
+// Keep the original filename separate from Vite's hashed production asset URL.
+const [[samplePath, sampleUrl]] = Object.entries(import.meta.glob<string>(
+  '../../test_data/sample-obstacles.fgb',
+  { eager: true, query: '?url', import: 'default' },
+));
+const sourceId = samplePath.slice(samplePath.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
 
 // JSON imports widen literal types and coordinate tuples.
 const sampleStyle = sampleStyleJson as unknown as StyleSpecification;
-const sourceId = 'geoflatpack-obstacles';
 
 type Bounds = [[number, number], [number, number]];
 
@@ -127,7 +132,7 @@ export default function App() {
         const obstacleLayerIds: string[] = [];
         // The sample background would hide the street basemap.
         for (const layer of sampleStyle.layers) {
-          if ('source' in layer && layer.source === 'obstacles') {
+          if ('source' in layer && layer.source === sourceId) {
             map.addLayer({ ...layer, id: `geoflatpack-${layer.id}`, source: sourceId });
             obstacleLayerIds.push(`geoflatpack-${layer.id}`);
           }
