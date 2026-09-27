@@ -8,6 +8,18 @@ import (
 	"strings"
 )
 
+type PropertyType string
+
+const (
+	ColorType     PropertyType = "color"
+	StringType    PropertyType = "string"
+	EnumType      PropertyType = "enum"
+	BooleanType   PropertyType = "boolean"
+	NumberType    PropertyType = "number"
+	ArrayType     PropertyType = "array"
+	ReferenceType PropertyType = "reference"
+)
+
 func ParseProperty(input string, property PropertySpec) (any, error) {
 	input = strings.TrimSpace(input)
 
@@ -20,22 +32,22 @@ func ParseProperty(input string, property PropertySpec) (any, error) {
 	}
 
 	switch property.Type {
-	case "color":
+	case string(ColorType):
 		return style.ParseRGB(input)
 
-	case "string", "resolvedImage", "formatted":
+	case string(StringType), string(ReferenceType):
 		return input, nil
 
-	case "enum":
+	case string(EnumType):
 		if _, ok := property.Values[input]; !ok {
 			return nil, fmt.Errorf("invalid choice %q", input)
 		}
 		return input, nil
 
-	case "boolean":
+	case string(BooleanType):
 		return strconv.ParseBool(input)
 
-	case "number":
+	case string(NumberType):
 		var value float64
 		if err := json.Unmarshal([]byte(input), &value); err != nil {
 			return nil, fmt.Errorf("enter a number")
@@ -51,7 +63,7 @@ func ParseProperty(input string, property PropertySpec) (any, error) {
 		}
 		return value, nil
 
-	case "array":
+	case string(ArrayType):
 		var values []any
 		if err := json.Unmarshal([]byte(input), &values); err != nil || values == nil {
 			return nil, fmt.Errorf("enter a JSON array, for example [2, 1]")
