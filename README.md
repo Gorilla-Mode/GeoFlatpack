@@ -74,5 +74,5 @@ The `web/` directory contains a browser-based MapLibre example. See the [web REA
 - [x] Parse FGB
 - [x] Web demo
 - [x] Generate MapLibre stylesheet
-- [x] User input for maplibre stylesheet
+- [ ] User input for maplibre stylesheet
 - [ ] Symbology support
