@@ -2,7 +2,11 @@ import { validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import type { StyleSpecification } from 'maplibre-gl';
 import { deserialize } from 'flatgeobuf/lib/mjs/geojson.js';
 import type { HeaderMeta } from 'flatgeobuf/lib/mjs/header-meta.js';
+import { Header } from 'flatgeobuf/lib/mjs/flat-geobuf/header.js';
+import { ByteBuffer } from 'flatbuffers';
 import type { FeatureCollection, Geometry } from 'geojson';
+
+export type DatasetHeader = HeaderMeta & { name: string | null; hasZ: boolean };
 
 export function getSourceName(filename: string): string {
   return filename.slice(filename.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
@@ -12,7 +16,7 @@ export type Dataset = {
   filename: string;
   style: StyleSpecification;
   data: FeatureCollection;
-  header: HeaderMeta | null;
+  header: DatasetHeader | null;
 };
 
 export function getBounds(data: FeatureCollection): [[number, number], [number, number]] | null {
@@ -62,9 +66,9 @@ export async function readDataset(fgbFile: File, styleFile: File): Promise<Datas
   return { filename: fgbFile.name, style, ...await decodeFgb(await fgbFile.arrayBuffer()) };
 }
 
-export async function decodeFgb(buffer: ArrayBuffer, signal?: AbortSignal, onHeader?: (header: HeaderMeta) => void) {
+export async function decodeFgb(buffer: ArrayBuffer, signal?: AbortSignal, onHeader?: (header: DatasetHeader) => void) {
   const data: FeatureCollection = { type: 'FeatureCollection', features: [] };
-  let header: HeaderMeta | null = null;
+  let header: DatasetHeader | null = null;
   let expectedFeatures = 0;
   try {
     signal?.throwIfAborted();
@@ -81,8 +85,10 @@ export async function decodeFgb(buffer: ArrayBuffer, signal?: AbortSignal, onHea
           throw new Error('Invalid feature count');
         }
         expectedFeatures = metadata.featuresCount;
-        header = metadata;
-        onHeader?.(metadata);
+        // HeaderMeta omits the dataset name and dimensional flags.
+        const rawHeader = Header.getSizePrefixedRootAsHeader(new ByteBuffer(bytes.subarray(8, 12 + headerLength)));
+        header = { ...metadata, name: rawHeader.name(), hasZ: rawHeader.hasZ() };
+        onHeader?.(header);
       },
     })) {
       signal?.throwIfAborted();
