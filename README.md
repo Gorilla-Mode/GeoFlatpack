@@ -28,7 +28,7 @@ Then run it:
 | `-h`     | Show help                                | —          |
 | `-v`     | Verbose output                           | —          |
 
-The output path is `<output-directory>/<input-name>.gfp`. For example, `map.gml` produces `map.gfp` in the chosen output directory.
+The output files are `<output-directory>/<input-name>.fgb` and `<output-directory>/<input-name>.maplibre.json`. For example, `map.gml` produces `map.fgb` and `map.maplibre.json` in the chosen output directory. A custom output path such as `-o /output/roads.fgb` produces `/output/roads.fgb` and `/output/roads.maplibre.json`, with `roads` as the style name and JSON source name.
 
 ## Web example
 

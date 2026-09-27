@@ -3,7 +3,9 @@ package main
 import (
 	"GeoFlatpack/convert"
 	"GeoFlatpack/fgb"
+	"GeoFlatpack/style/maplibre"
 	"GeoFlatpack/validate"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -118,5 +120,30 @@ func main() {
 
 	if *verbose {
 		fmt.Println("gfp: FlatGeobuf written to", output)
+	}
+
+	style, err := maplibre.BuildMapLibreStyle(
+		LoadedFgb, filepath.Base(output), "", "kind", maplibre.TestPaints,
+	)
+
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to build MapLibre style:", err)
+		os.Exit(1)
+	}
+
+	styleJSON, err := json.MarshalIndent(style, "", "  ")
+	if err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to marshal MapLibre style:", err)
+		os.Exit(1)
+	}
+
+	styleOutput := strings.TrimSuffix(output, filepath.Ext(output)) + ".gen.maplibre.json"
+	if err := os.WriteFile(styleOutput, styleJSON, 0644); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to write MapLibre style:", err)
+		os.Exit(1)
+	}
+
+	if *verbose {
+		fmt.Println("gfp: MapLibre style written to", styleOutput)
 	}
 }
