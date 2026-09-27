@@ -31,6 +31,8 @@ Open the local URL printed by Vite.
 
 The sample files are imported directly from `test_data/`. Vite bundles the style and copies the FGB into the production assets; no manual copying or backend is needed.
 
+The map source name is the original FGB filename without its final extension: `sample-obstacles.fgb` becomes `sample-obstacles`. The stylesheet's `sources` key and each data layer's `source` must match that name. When changing the loaded file, update the FGB import path and matching stylesheet references. Production asset hashes do not affect the source name.
+
 Use **Inspect Header** to view the FlatGeobuf file's **Parsed header content**, including column definitions, geometry type, bounds, feature count, spatial index node size, and CRS. Objects and arrays appear as an expandable tree; click a branch or focus it and press Enter or Space to toggle it. The panel scrolls to show long values, and reopening it expands every branch again. It shares the panel with **Inspect GeoJSON** and **Inspect Map Style**.
 
 The header button becomes available when the existing file decoder parses the header, without another download or waiting for the basemap. If feature decoding later fails, the parsed header remains available alongside the error message.
