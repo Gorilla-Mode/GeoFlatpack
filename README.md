@@ -1,10 +1,11 @@
 # GeoFlatpack
 
-GeoFlatpack is a tool for converting `.gml` files into a FlatGeobuf file. With an associated stylesheet, and symbology support.
+GeoFlatpack converts each layer in a `.gml` file into its own FlatGeobuf file and generates one shared MapLibre stylesheet. All layers are converted and parsed in memory before styling or writing outputs.
 
 ## Requirements
 
 - Go 1.27 or later
+- GDAL development libraries with GML and FlatGeobuf support (`gdal-config` available)
 
 ## Usage
 
@@ -25,29 +26,29 @@ Then run it:
 
 ### Flags
 
-| Argument            | Description                                                            | Default    | Required? |
-|---------------------|------------------------------------------------------------------------|------------|-----------|
-| `-i`                | Path to the input `.gml` file                                          | —          | Yes       |
-| `-o`                | Output file path or directory (use a trailing `/` for a new directory) | `./`       | No        |
-| `-f`                | Stylesheet format: `maplibre` or `sld`                                 | `maplibre` | No        |
-| `-h`                | Show help                                                              | `false`    | No        |
-| `-v`                | Verbose output                                                         | `false`    | No        |
-| `--write-fgb`       | Write the FlatGeobuf output file                                       | `true`     | No        |
-| `--write-style`     | Write the generated stylesheet output file                             | `true`     | No        |
-| `--force-epsg:4326` | Reproject coordinates and CRS metadata to EPSG:4326                    | `true`     | No        |
-| `--skip-failures`   | Skip feature conversion failures; can produce incomplete output        | `false`    | No        |
+| Argument            | Description                                                                 | Default    | Required? |
+|---------------------|-----------------------------------------------------------------------------|------------|-----------|
+| `-i`                | Path to the input `.gml` file                                               | —          | Yes       |
+| `-o`                | Output base file path or directory (use a trailing `/` for a new directory) | `./`       | No        |
+| `-f`                | Stylesheet format: `maplibre` or `sld`                                      | `maplibre` | No        |
+| `-h`                | Show help                                                                   | `false`    | No        |
+| `-v`                | Verbose output                                                              | `false`    | No        |
+| `--write-fgb`       | Write one FlatGeobuf output file per input layer                            | `true`     | No        |
+| `--write-style`     | Prompt per layer and write one shared `.gen.maplibre.json` stylesheet       | `true`     | No        |
+| `--force-epsg:4326` | Reproject coordinates and CRS metadata to EPSG:4326                         | `true`     | No        |
+| `--skip-failures`   | Skip feature conversion failures; can produce incomplete output             | `false`    | No        |
 
 Disable either output with a boolean flag:
 
 ```zsh
-# Style only: writes roads.gen.maplibre.json with roads as the source name
+# Style only: writes roads.gen.maplibre.json; still converts and loads every layer
 ./GeoFlatpack -i path/to/map.gml -o path/to/roads.fgb --write-fgb=false
 
-# FlatGeobuf only: writes roads.fgb
+# FlatGeobuf only: writes roads.fgb (one layer) or roads.<layer>.fgb (multiple layers); no prompts
 ./GeoFlatpack -i path/to/map.gml -o path/to/roads.fgb --write-style=false
 
 # Process the input in memory without creating output files or directories
-# can be combined with verbose output to display the fgb file as text
+# Combine with -v to inspect every layer as text
 ./GeoFlatpack -i path/to/map.gml -o path/to/output/ --write-fgb=false --write-style=false
 
 # Preserve the input coordinate system instead of reprojecting to EPSG:4326
@@ -55,12 +56,34 @@ Disable either output with a boolean flag:
 ```
 
 Disabled outputs leave any existing files untouched. Both flags default to `true`; use `=false` to disable them.
+Disabling style output skips all prompts. Disabling both outputs still converts and loads every layer but creates no
+output files or directories.
 
-To let GDAL skip feature conversion failures, enable `--skip-failures` (default: `false`). Skipped failures can produce incomplete output.
+To let GDAL skip feature conversion failures, enable `--skip-failures` (default: `false`). **Skipped failures can produce
+incomplete output.**
 
 ```sh
 ./GeoFlatpack -i input.gml -o ./ --skip-failures
 ```
+
+
+### Layer outputs and styling
+
+A single-layer input produces `<base>.fgb`, multiple layers produce `<base>.<layer>.fgb`,
+following [GDAL's single-layer FlatGeobuf model](https://gdal.org/en/stable/drivers/vector/flatgeobuf.html#multi-layer-support).
+
+For example, from the `GeoFlatpack/` directory:
+
+```zsh
+./GeoFlatpack -i ../some/multi-layer.gml -o ./output/map.fgb
+# output/map.Stops.fgb
+# output/map.Routes.fgb
+# output/map.Zones.fgb
+# output/map.gen.maplibre.json
+```
+
+The stylesheet always uses the **`.gen` tag** and has one source per FGB, with IDs set to the final filenames without `.fgb`.
+Sources are empty GeoJSON placeholders for the consuming application to populate.
 
 ## Web example
 
@@ -91,5 +114,5 @@ The `web/` directory contains a browser-based MapLibre example. See the [web REA
 - [x] Web demo
 - [x] Generate MapLibre stylesheet
 - [x] Cli user input for maplibre stylesheet
-- [x] Tui user input for maplibre stylesheet
+- [ ] Tui user input for maplibre stylesheet
 - [ ] Symbology support
