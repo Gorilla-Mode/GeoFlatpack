@@ -11,24 +11,41 @@ GeoFlatpack is a tool for converting `.gml` files into a FlatGeobuf file. With a
 From the repository root, compile the CLI:
 
 ```zsh
-go build -o gfp ./GFP
+(cd GFP && go build -o ../gfp .)
 ```
 
 Then run it:
 
 ```zsh
-./gfp -i path/to/map.gml -o path/to/output -f maplibre
+./gfp -i path/to/map.gml -o path/to/output/ -f maplibre
 ```
 
-| Argument | Description                              | Default    |
-|----------|------------------------------------------|------------|
-| `-i`     | Path to the input `.gml` file (required) | —          |
-| `-o`     | Path to the output directory             | `.`        |
-| `-f`     | Stylesheet format: `maplibre` or `sld`   | `maplibre` |
-| `-h`     | Show help                                | —          |
-| `-v`     | Verbose output                           | —          |
+| Argument        | Description                                                            | Default    |
+|-----------------|------------------------------------------------------------------------|------------|
+| `-i`            | Path to the input `.gml` file (required)                               | —          |
+| `-o`            | Output file path or directory (use a trailing `/` for a new directory) | empty      |
+| `-f`            | Stylesheet format: `maplibre` or `sld`                                 | `maplibre` |
+| `-h`            | Show help                                                              | —          |
+| `-v`            | Verbose output                                                         | —          |
+| `--write-fgb`   | Write the FlatGeobuf output file                                       | `true`     |
+| `--write-style` | Write the generated stylesheet output file                             | `true`     |
 
-The output files are `<output-directory>/<input-name>.fgb` and `<output-directory>/<input-name>.maplibre.json`. For example, `map.gml` produces `map.fgb` and `map.maplibre.json` in the chosen output directory. A custom output path such as `-o /output/roads.fgb` produces `/output/roads.fgb` and `/output/roads.maplibre.json`, with `roads` as the style name and JSON source name.
+By default, both output files are written: `<output-directory>/<input-name>.fgb` and `<output-directory>/<input-name>.gen.maplibre.json`. For example, `map.gml` produces `map.fgb` and `map.gen.maplibre.json` in the chosen output directory. A custom output path such as `-o /output/roads.fgb` produces `/output/roads.fgb` and `/output/roads.gen.maplibre.json`, with `roads` as the style name and JSON source name. Use `-o .` to write files named after the input in the current directory.
+
+Disable either output with a boolean flag:
+
+```zsh
+# Style only: writes roads.gen.maplibre.json with roads as the source name
+./gfp -i path/to/map.gml -o path/to/roads.fgb --write-fgb=false
+
+# FlatGeobuf only: writes roads.fgb
+./gfp -i path/to/map.gml -o path/to/roads.fgb --write-style=false
+
+# Process the input in memory without creating output files or directories
+./gfp -i path/to/map.gml -o path/to/output/ --write-fgb=false --write-style=false
+```
+
+Disabled outputs leave any existing files untouched. Both flags default to `true`; use `=false` to disable them.
 
 ## Web example
 
