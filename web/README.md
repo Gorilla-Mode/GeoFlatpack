@@ -4,7 +4,7 @@ A single fullscreen MapLibre map built with React, TypeScript, and Vite.
 
 ## Getting started
 
-Install a current Node.js LTS release, then run from the repository root:
+Install a current Node.js LTS release, then from the repository root:
 
 ```sh
 cd web
@@ -12,44 +12,46 @@ npm install
 npm run dev
 ```
 
-Open the local URL printed by Vite.
+Open the URL printed by Vite.
 
 ## Scripts
 
-| Command           | Purpose                                                |
-|-------------------|--------------------------------------------------------|
-| `npm run dev`     | Start the development server                           |
-| `npm test`        | Check local file decoding and stylesheet validation (Node.js 22.18+) |
-| `npm run build`   | Check TypeScript and build the static app into `dist/` |
-| `npm run preview` | Serve the production build locally                     |
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start the development server |
+| `npm test` | Check file decoding and stylesheet validation (Node.js 22.18+) |
+| `npm run build` | Check TypeScript and build the static app into `dist/` |
+| `npm run preview` | Serve the production build locally |
 
 ## Map data and styling
 
-| File                                                                            | Use                                                               |
-|---------------------------------------------------------------------------------|-------------------------------------------------------------------|
-| [`sample-obstacles.fgb`](../test_data/sample-obstacles.fgb)                     | Decoded in the browser into a GeoJSON source                      |
-| [`sample-obstacles.maplibre.json`](../test_data/sample-obstacles.maplibre.json) | Supplies the initial view, obstacle filters, and paint properties |
+| File | Purpose |
+|---|---|
+| [`sample-obstacles.fgb`](../test_data/sample-obstacles.fgb) | Decoded in the browser into a GeoJSON source |
+| [`sample-obstacles.maplibre.json`](../test_data/sample-obstacles.maplibre.json) | Initial view, obstacle filters, and paint properties |
 
-The sample files are imported directly from `test_data/`. Vite bundles the style and copies the FGB into the production assets; no manual copying or backend is needed.
+Imported directly from `test_data/`. Vite bundles the style and copies the FGB into production assets — no manual copying or backend.
 
-The map source name is the original FGB filename without its final extension: `sample-obstacles.fgb` becomes `sample-obstacles`. The stylesheet's `sources` key and each data layer's `source` must match that name. When changing the loaded file, update the FGB import path and matching stylesheet references. Production asset hashes do not affect the source name.
+## Source, uploads, and inspectors
 
-Use **Upload files** to choose a local `.fgb` file and its MapLibre `.json` stylesheet, then select **Display on map**. For example, `roads.fgb` and `roads.gen.maplibre.json` must use `roads` as the stylesheet's GeoJSON source name. Both files are read in the browser. The uploaded dataset replaces the sample and the map centers on its bounds; the header, GeoJSON, and style inspectors show the uploaded content. Invalid files or mismatched source names show an error while leaving the current dataset in place. Only layers using the matching source are added above the street basemap; stylesheet backgrounds and unrelated sources are skipped.
+| Concept | Notes |
+|---|---|
+| **Source name** | FGB filename without extension, e.g. `sample-obstacles.fgb` → `sample-obstacles`. Must match the stylesheet's `sources` key and each layer's `source`. Update both the import path and stylesheet references when changing files. Asset hashes are separate. |
+| **Upload files** | Pick a local `.fgb` + matching `.json` stylesheet, then **Display on map** (e.g. `roads.fgb` + `roads.gen.maplibre.json` → `roads`). Both read in the browser. Replaces the sample, centers map on bounds, and updates the header, GeoJSON, and style inspectors. Invalid files or mismatched source names error without removing the current dataset. |
+| **Inspect Header** | Shows parsed header: columns, geometry type, bounds, feature count, spatial index node size, CRS. Expandable tree — focus a branch and press Enter/Space to toggle. Scrolls long values; reopen re-expands all. Shares the panel with **Inspect GeoJSON** and **Inspect Map Style**. |
 
-Use **Inspect Header** to view the FlatGeobuf file's **Parsed header content**, including column definitions, geometry type, bounds, feature count, spatial index node size, and CRS. Objects and arrays appear as an expandable tree; click a branch or focus it and press Enter or Space to toggle it. The panel scrolls to show long values, and reopening it expands every branch again. It shares the panel with **Inspect GeoJSON** and **Inspect Map Style**.
+Only layers using the matching source render above the basemap; stylesheet backgrounds and unrelated sources are skipped. The header button appears once the decoder parses the header — no extra download or basemap wait — and stays available if feature decoding fails, alongside the error.
 
-The header button becomes available when the existing file decoder parses the header, without another download or waiting for the basemap. If feature decoding later fails, the parsed header remains available alongside the error message.
+## Basemap
 
-The [OpenFreeMap Liberty basemap](https://openfreemap.org/quick_start/) provides streets and place names and requires internet access. The sample style's background layer is skipped so the basemap stays visible. Obstacle layers appear above the basemap, and MapLibre displays the basemap attribution.
+[OpenFreeMap Liberty](https://openfreemap.org/quick_start/) (street names and places) needs internet. The sample style's background layer is skipped so it stays visible; obstacles render above it, and MapLibre handles the attribution.
 
 ## GitHub Pages
 
-The expected site URL is https://gorilla-mode.github.io/GeoFlatpack/.
+URL: https://gorilla-mode.github.io/GeoFlatpack/
 
-One-time setup: in the repository, select **Settings → Pages → Source → GitHub Actions**, as described in the [GitHub Pages documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages).
+Once: repo **Settings → Pages → Source → GitHub Actions** ([docs](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)).
 
-The [deployment workflow](../.github/workflows/deploy-pages.yml) runs on every push to `master`, including changes to either sample data file. Once the workflow is on `master`, you can also run it manually from **Actions → Deploy to GitHub Pages → Run workflow**, selecting `master`.
+The [workflow](../.github/workflows/deploy-pages.yml) runs on every push to `master`. Also runnable manually from **Actions → Deploy to GitHub Pages → Run workflow** with `master`. Uses Node.js 22, `npm ci`, a TS check, and a build. Before uploading `web/dist` it verifies the emitted FGB matches byte-for-byte and that CSS + MapLibre worker assets exist. Deployments run serially without cancelling active ones. The `github-pages` environment exposes the deployed URL.
 
-The workflow uses Node.js 22 and `npm ci`, checks TypeScript, and builds the app. Before uploading only `web/dist`, it verifies that the emitted FGB matches the source byte-for-byte and that CSS and MapLibre worker assets exist. Deployments run serially without cancelling an active deployment, and the `github-pages` environment exposes the deployed URL.
-
-Vite's relative asset paths support the `/GeoFlatpack/` project path. The sample style is bundled into the app, while the FGB, CSS, and bundled worker are emitted as assets. The basemap still requires internet access.
+Vite paths support the `/GeoFlatpack/` host. The style is bundled into the app; the FGB, CSS, and worker are emitted as assets. The basemap still needs internet.
