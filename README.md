@@ -114,5 +114,6 @@ The `web/` directory contains a browser-based MapLibre example. See the [web REA
 - [x] Web demo
 - [x] Generate MapLibre stylesheet
 - [x] Cli user input for maplibre stylesheet
+- [x] Layered GML support
 - [ ] Tui user input for maplibre stylesheet
 - [ ] Symbology support
