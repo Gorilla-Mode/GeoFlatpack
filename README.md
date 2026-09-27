@@ -35,6 +35,7 @@ Then run it:
 | `--write-fgb`       | Write the FlatGeobuf output file                                       | `true`     | No        |
 | `--write-style`     | Write the generated stylesheet output file                             | `true`     | No        |
 | `--force-epsg:4326` | Reproject coordinates and CRS metadata to EPSG:4326                    | `true`     | No        |
+| `--skip-failures`   | Skip feature conversion failures; can produce incomplete output        | `false`    | No        |
 
 Disable either output with a boolean flag:
 
@@ -54,6 +55,12 @@ Disable either output with a boolean flag:
 ```
 
 Disabled outputs leave any existing files untouched. Both flags default to `true`; use `=false` to disable them.
+
+To let GDAL skip feature conversion failures, enable `--skip-failures` (default: `false`). Skipped failures can produce incomplete output.
+
+```sh
+./GeoFlatpack -i input.gml -o ./ --skip-failures
+```
 
 ## Web example
 

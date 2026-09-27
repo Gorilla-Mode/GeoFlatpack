@@ -24,6 +24,7 @@ func main() {
 	verbose := flag.Bool("v", false, "Verbose output")
 	writeFgb := flag.Bool("write-fgb", true, "Write the FlatGeobuf output file")
 	writeStyle := flag.Bool("write-style", true, "Write the generated stylesheet output file")
+	skipFailures := flag.Bool("skip-failures", false, "Skip feature conversion failures; skipped failures can produce incomplete output")
 	forceEPSG4326 := flag.Bool("force-epsg:4326", true, "Reproject coordinates and CRS metadata to EPSG:4326 regardless of stylesheet output; use --force-epsg:4326=false to preserve the original CRS. Regenerate existing projected FGB files for the web app")
 
 	flag.Usage = func() {
@@ -77,7 +78,7 @@ func main() {
 
 	//endregion
 
-	memoryFGB, err := convert.GmlToFgb(*inputFile, *forceEPSG4326)
+	memoryFGB, err := convert.GmlToFgb(*inputFile, *forceEPSG4326, *skipFailures)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to convert GML to FlatGeobuf:", err)
 
