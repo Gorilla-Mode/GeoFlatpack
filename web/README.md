@@ -37,6 +37,7 @@ Imported directly from `test_data/`. Vite bundles the style and copies the FGB i
 | Concept | Notes |
 |---|---|
 | **Source name** | FGB filename without extension, e.g. `sample-obstacles.fgb` → `sample-obstacles`. Must match the stylesheet's `sources` key and each layer's `source`. Update both the import path and stylesheet references when changing files. Asset hashes are separate. |
+| **CLI output** | Writes two files per input: `<output>/<input-name>.fgb` and `.gen.maplibre.json`. Default output dir uses the input name, e.g. `map.gml` → `map.fgb` + `map.gen.maplibre.json`. `-o /output/roads.fgb` writes to that dir as `roads.fgb` + `roads.gen.maplibre.json` (source `roads`). `-o .` writes named files to the current dir. |
 | **Upload files** | Pick a local `.fgb` + matching `.json` stylesheet, then **Display on map** (e.g. `roads.fgb` + `roads.gen.maplibre.json` → `roads`). Both read in the browser. Replaces the sample, centers map on bounds, and updates the header, GeoJSON, and style inspectors. Invalid files or mismatched source names error without removing the current dataset. |
 | **Inspect Header** | Shows parsed header: columns, geometry type, bounds, feature count, spatial index node size, CRS. Expandable tree — focus a branch and press Enter/Space to toggle. Scrolls long values; reopen re-expands all. Shares the panel with **Inspect GeoJSON** and **Inspect Map Style**. |
 
