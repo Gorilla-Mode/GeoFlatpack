@@ -21,15 +21,16 @@ Then run it:
 ./GeoFlatpack -i path/to/map.gml -o path/to/output/ -f maplibre
 ```
 
-| Argument        | Description                                                            | Default    |
-|-----------------|------------------------------------------------------------------------|------------|
-| `-i`            | Path to the input `.gml` file (required)                               | —          |
-| `-o`            | Output file path or directory (use a trailing `/` for a new directory) | empty      |
-| `-f`            | Stylesheet format: `maplibre` or `sld`                                 | `maplibre` |
-| `-h`            | Show help                                                              | —          |
-| `-v`            | Verbose output                                                         | —          |
-| `--write-fgb`   | Write the FlatGeobuf output file                                       | `true`     |
-| `--write-style` | Write the generated stylesheet output file                             | `true`     |
+| Argument            | Description                                                            | Default    |
+|---------------------|------------------------------------------------------------------------|------------|
+| `-i`                | Path to the input `.gml` file (required)                               | —          |
+| `-o`                | Output file path or directory (use a trailing `/` for a new directory) | empty      |
+| `-f`                | Stylesheet format: `maplibre` or `sld`                                 | `maplibre` |
+| `-h`                | Show help                                                              | —          |
+| `-v`                | Verbose output                                                         | —          |
+| `--write-fgb`       | Write the FlatGeobuf output file                                       | `true`     |
+| `--write-style`     | Write the generated stylesheet output file                             | `true`     |
+| `--force-epsg:4326` | Reproject coordinates and CRS metadata to EPSG:4326                    | `true`     |
 
 Disable either output with a boolean flag:
 
@@ -43,6 +44,9 @@ Disable either output with a boolean flag:
 # Process the input in memory without creating output files or directories
 # can be combined with verbose output to display the fgb file as text
 ./GeoFlatpack -i path/to/map.gml -o path/to/output/ --write-fgb=false --write-style=false
+
+# Preserve the input coordinate system instead of reprojecting to EPSG:4326
+./GeoFlatpack -i path/to/map.gml -o path/to/roads.fgb --force-epsg:4326=false
 ```
 
 Disabled outputs leave any existing files untouched. Both flags default to `true`; use `=false` to disable them.

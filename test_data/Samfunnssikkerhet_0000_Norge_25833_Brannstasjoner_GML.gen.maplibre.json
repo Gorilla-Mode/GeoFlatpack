@@ -1,0 +1,80 @@
+{
+  "version": 8,
+  "name": "Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML",
+  "sources": {
+    "Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML": {
+      "data": {
+        "features": [],
+        "type": "FeatureCollection"
+      },
+      "type": "geojson"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#1e1e1e"
+      }
+    },
+    {
+      "id": "Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML-Point-0",
+      "type": "circle",
+      "source": "Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML",
+      "filter": [
+        "all",
+        [
+          "==",
+          [
+            "geometry-type"
+          ],
+          "Point"
+        ],
+        [
+          "==",
+          [
+            "get",
+            "stasjonstype"
+          ],
+          "H"
+        ]
+      ],
+      "paint": {
+        "circle-color": "#ffffff",
+        "circle-radius": 6,
+        "circle-stroke-color": "#000000",
+        "circle-stroke-width": 4
+      }
+    },
+    {
+      "id": "Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML-Point-1",
+      "type": "circle",
+      "source": "Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML",
+      "filter": [
+        "all",
+        [
+          "==",
+          [
+            "geometry-type"
+          ],
+          "Point"
+        ],
+        [
+          "==",
+          [
+            "get",
+            "stasjonstype"
+          ],
+          "L"
+        ]
+      ],
+      "paint": {
+        "circle-color": "#000000",
+        "circle-radius": 6,
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 4
+      }
+    }
+  ]
+}

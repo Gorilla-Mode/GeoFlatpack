@@ -24,6 +24,7 @@ func main() {
 	verbose := flag.Bool("v", false, "Verbose output")
 	writeFgb := flag.Bool("write-fgb", true, "Write the FlatGeobuf output file")
 	writeStyle := flag.Bool("write-style", true, "Write the generated stylesheet output file")
+	forceEPSG4326 := flag.Bool("force-epsg:4326", true, "Reproject coordinates and CRS metadata to EPSG:4326 regardless of stylesheet output; use --force-epsg:4326=false to preserve the original CRS. Regenerate existing projected FGB files for the web app")
 
 	flag.Usage = func() {
 		_, _ = fmt.Fprintln(os.Stderr, "Usage gfp -i <input file> -f <stylesheet format> -o <output directory>")
@@ -76,7 +77,7 @@ func main() {
 
 	//endregion
 
-	memoryFGB, err := convert.GmlToFgb(*inputFile)
+	memoryFGB, err := convert.GmlToFgb(*inputFile, *forceEPSG4326)
 	if err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to convert GML to FlatGeobuf:", err)
 
@@ -107,7 +108,7 @@ func main() {
 
 	LoadedFgb, err := fgb.LoadFgb(src)
 	if err != nil {
-		return
+		log.Fatal("gfp: failed to load FlatGeobuf: ", err)
 	}
 
 	if *verbose {
@@ -134,18 +135,13 @@ func main() {
 	}
 
 	if *writeStyle {
-		groups, err := maplibre.CollectStyleGroups(LoadedFgb, "kind")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		paints, err := cli.PromptPaints(groups, os.Stdin, os.Stderr)
+		field, paints, err := cli.PromptStyle(LoadedFgb, os.Stdin, os.Stderr)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		style, err := maplibre.BuildMapLibreStyle(
-			LoadedFgb, filepath.Base(output), "", "kind", paints,
+			LoadedFgb, filepath.Base(output), "", field, paints,
 		)
 
 		if err != nil {
