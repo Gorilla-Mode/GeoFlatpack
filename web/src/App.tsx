@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { SubmitEvent } from 'react';
 import { Map, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl';
 import type { MapMouseEvent, StyleSpecification } from 'maplibre-gl';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -6,6 +7,8 @@ import { deserialize } from 'flatgeobuf/lib/mjs/geojson.js';
 import type { HeaderMeta } from 'flatgeobuf/lib/mjs/header-meta.js';
 import type { FeatureCollection } from 'geojson';
 import HeaderTree from './HeaderTree';
+import { getSourceName, readDataset } from './dataset';
+import type { Dataset } from './dataset';
 import sampleStyleJson from '../../test_data/sample-obstacles.maplibre.json';
 
 // Keep the original filename separate from Vite's hashed production asset URL.
@@ -13,7 +16,6 @@ const [[samplePath, sampleUrl]] = Object.entries(import.meta.glob<string>(
   '../../test_data/sample-obstacles.fgb',
   { eager: true, query: '?url', import: 'default' },
 ));
-const sourceId = samplePath.slice(samplePath.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '');
 
 // JSON imports widen literal types and coordinate tuples.
 const sampleStyle = sampleStyleJson as unknown as StyleSpecification;
@@ -67,11 +69,45 @@ export default function App() {
   const [header, setHeader] = useState<HeaderMeta | null>(null);
   const [bounds, setBounds] = useState<Bounds | null>(null);
   const [inspecting, setInspecting] = useState<'geojson' | 'style' | 'header' | null>(null);
+  const [dataset, setDataset] = useState<Dataset | null>(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [fgbFile, setFgbFile] = useState<File | null>(null);
+  const [styleFile, setStyleFile] = useState<File | null>(null);
+  const uploadRequest = useRef(0);
+  const uploadButton = useRef<HTMLButtonElement>(null);
+  const activeStyle = dataset?.style ?? sampleStyle;
+  const filename = dataset?.filename ?? samplePath.slice(samplePath.lastIndexOf('/') + 1);
+
+  useEffect(() => () => { uploadRequest.current++; }, []);
+
+  async function uploadFiles(event: SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!fgbFile || !styleFile || uploading) return;
+    const request = ++uploadRequest.current;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const next = await readDataset(fgbFile, styleFile);
+      if (request !== uploadRequest.current) return;
+      setDataset(next);
+      setUploadOpen(false);
+      uploadButton.current?.focus();
+    } catch (cause) {
+      if (request !== uploadRequest.current) return;
+      setUploadError(cause instanceof Error ? cause.message : 'Unable to load these files.');
+    } finally {
+      if (request === uploadRequest.current) setUploading(false);
+    }
+  }
 
   useEffect(() => {
     if (!container.current) return;
 
     const controller = new AbortController();
+    const style = dataset?.style ?? sampleStyle;
+    const sourceId = getSourceName(dataset?.filename ?? samplePath);
     let map: Map;
     setLoading(true);
     setError(null);
@@ -83,8 +119,8 @@ export default function App() {
       map = new Map({
         container: container.current,
         style: 'https://tiles.openfreemap.org/styles/liberty',
-        center: sampleStyle.center,
-        zoom: sampleStyle.zoom,
+        center: style.center,
+        zoom: style.zoom,
       });
     } catch {
       setError('Unable to start the map. Check that WebGL is available in your browser.');
@@ -107,20 +143,26 @@ export default function App() {
     });
     const ready = new Promise<void>((resolve) => map.once('load', () => resolve()));
 
-    async function loadSample() {
+    async function loadData() {
       try {
-        const response = await fetch(sampleUrl, { signal: controller.signal });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        let data: FeatureCollection;
+        if (dataset) {
+          data = dataset.data;
+          setHeader(dataset.header);
+        } else {
+          const response = await fetch(sampleUrl, { signal: controller.signal });
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        const data: FeatureCollection = { type: 'FeatureCollection', features: [] };
-        for await (const feature of deserialize(bytes, {
-          headerMetaFn: (metadata) => {
-            if (!controller.signal.aborted) setHeader(metadata);
-          },
-        })) {
-          if (controller.signal.aborted) return;
-          data.features.push(feature);
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          data = { type: 'FeatureCollection', features: [] };
+          for await (const feature of deserialize(bytes, {
+            headerMetaFn: (metadata) => {
+              if (!controller.signal.aborted) setHeader(metadata);
+            },
+          })) {
+            if (controller.signal.aborted) return;
+            data.features.push(feature);
+          }
         }
         if (controller.signal.aborted) return;
         setGeojson(data);
@@ -128,10 +170,11 @@ export default function App() {
         await ready;
         if (controller.signal.aborted) return;
 
-        map.addSource(sourceId, { type: 'geojson', data });
+        if (map.getSource(sourceId)) throw new Error(`Source "${sourceId}" conflicts with the basemap.`);
+        map.addSource(sourceId, { ...style.sources[sourceId], type: 'geojson', data });
         const obstacleLayerIds: string[] = [];
-        // The sample background would hide the street basemap.
-        for (const layer of sampleStyle.layers) {
+        // Backgrounds and unrelated sources would replace or obscure the basemap.
+        for (const layer of style.layers) {
           if ('source' in layer && layer.source === sourceId) {
             map.addLayer({ ...layer, id: `geoflatpack-${layer.id}`, source: sourceId });
             obstacleLayerIds.push(`geoflatpack-${layer.id}`);
@@ -139,6 +182,9 @@ export default function App() {
         }
         const dataBounds = getFeatureCollectionBounds(data);
         if (obstacleLayerIds.length > 0 && dataBounds) setBounds(dataBounds);
+        if (dataset && dataBounds) {
+          map.fitBounds(dataBounds, { padding: 48, maxZoom: 18, duration: 0 });
+        }
 
         function findObstacle(event: MapMouseEvent) {
           const { x, y } = event.point;
@@ -157,11 +203,11 @@ export default function App() {
           const content = document.createElement('div');
           const title = document.createElement('h2');
           title.className = 'obstacle-popup-title';
-          title.textContent = 'Obstacle properties';
+          title.textContent = 'Feature properties';
           const properties = document.createElement('pre');
           properties.className = 'obstacle-properties';
           properties.tabIndex = 0;
-          properties.setAttribute('aria-label', 'Obstacle properties');
+          properties.setAttribute('aria-label', 'Feature properties');
           properties.textContent = JSON.stringify(feature.properties, null, 2);
           content.append(title, properties);
           popup.setLngLat(event.lngLat).setDOMContent(content).addTo(map);
@@ -188,12 +234,12 @@ export default function App() {
       } catch (cause) {
         if (controller.signal.aborted) return;
         const detail = cause instanceof Error ? ` (${cause.message})` : '';
-        setError(`Unable to load the sample obstacles${detail}. Reload to try again.`);
+        setError(`Unable to display ${dataset?.filename ?? 'the sample obstacles'}${detail}. Try loading the files again.`);
         setLoading(false);
       }
     }
 
-    void loadSample();
+    void loadData();
     return () => {
       controller.abort();
       removeObstacleInteractions();
@@ -201,13 +247,31 @@ export default function App() {
       map.remove();
       if (mapRef.current === map) mapRef.current = null;
     };
-  }, []);
+  }, [dataset]);
 
   return (
     <main>
-      <div ref={container} className="map" aria-label="Map of sample obstacles in Oslo" />
+      <div ref={container} className="map" aria-label={`Map of ${filename}`} />
       <div className="map-overlay">
         <div className="inspector-controls">
+          <button
+            ref={uploadButton}
+            type="button"
+            className="inspector-toggle"
+            aria-expanded={uploadOpen}
+            aria-controls="upload-panel"
+            disabled={uploading}
+            onClick={() => {
+              if (!uploadOpen) {
+                setFgbFile(null);
+                setStyleFile(null);
+                setUploadError(null);
+              }
+              setUploadOpen(open => !open);
+            }}
+          >
+            Upload files
+          </button>
           <button
             type="button"
             className="inspector-toggle"
@@ -257,9 +321,36 @@ export default function App() {
             {inspecting === 'style' ? 'Hide Map Style' : 'Inspect Map Style'}
           </button>
         </div>
+        {uploadOpen && (
+          <form id="upload-panel" className="upload-panel" onSubmit={uploadFiles} aria-label="Upload map files">
+            <p>Choose a FlatGeobuf file and its MapLibre JSON stylesheet. Files are read locally in your browser.</p>
+            <p>The style source must match the FGB filename without its extension.</p>
+            <fieldset disabled={uploading}>
+              <label>
+                FlatGeobuf file
+                <input type="file" accept=".fgb" required onChange={event => {
+                  setFgbFile(event.target.files?.[0] ?? null);
+                  setUploadError(null);
+                }} />
+              </label>
+              <label>
+                MapLibre stylesheet
+                <input type="file" accept=".json,application/json" required onChange={event => {
+                  setStyleFile(event.target.files?.[0] ?? null);
+                  setUploadError(null);
+                }} />
+              </label>
+              <button type="submit" className="inspector-toggle" disabled={!fgbFile || !styleFile}>
+                {uploading ? 'Reading files…' : 'Display on map'}
+              </button>
+            </fieldset>
+            {uploading && <p role="status">Reading files…</p>}
+            {uploadError && <p role="alert">{uploadError}</p>}
+          </form>
+        )}
         {(loading || error) && (
           <div className="map-status" role={error ? 'alert' : 'status'}>
-            {error ?? 'Loading map and sample obstacles…'}
+            {error ?? `Loading map and ${filename}…`}
           </div>
         )}
         {(inspecting === 'style' || (inspecting === 'geojson' && geojson !== null)) && (
@@ -270,7 +361,7 @@ export default function App() {
             tabIndex={0}
             aria-label={inspecting === 'geojson' ? 'Decoded GeoJSON' : 'Map style JSON source'}
           >
-            {JSON.stringify(inspecting === 'geojson' ? geojson : sampleStyleJson, null, 2)}
+            {JSON.stringify(inspecting === 'geojson' ? geojson : activeStyle, null, 2)}
           </pre>
         )}
         {inspecting === 'header' && header !== null && (

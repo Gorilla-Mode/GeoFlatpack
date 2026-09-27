@@ -19,6 +19,7 @@ Open the local URL printed by Vite.
 | Command           | Purpose                                                |
 |-------------------|--------------------------------------------------------|
 | `npm run dev`     | Start the development server                           |
+| `npm test`        | Check local file decoding and stylesheet validation (Node.js 22.18+) |
 | `npm run build`   | Check TypeScript and build the static app into `dist/` |
 | `npm run preview` | Serve the production build locally                     |
 
@@ -32,6 +33,8 @@ Open the local URL printed by Vite.
 The sample files are imported directly from `test_data/`. Vite bundles the style and copies the FGB into the production assets; no manual copying or backend is needed.
 
 The map source name is the original FGB filename without its final extension: `sample-obstacles.fgb` becomes `sample-obstacles`. The stylesheet's `sources` key and each data layer's `source` must match that name. When changing the loaded file, update the FGB import path and matching stylesheet references. Production asset hashes do not affect the source name.
+
+Use **Upload files** to choose a local `.fgb` file and its MapLibre `.json` stylesheet, then select **Display on map**. For example, `roads.fgb` and `roads.gen.maplibre.json` must use `roads` as the stylesheet's GeoJSON source name. Both files are read in the browser. The uploaded dataset replaces the sample and the map centers on its bounds; the header, GeoJSON, and style inspectors show the uploaded content. Invalid files or mismatched source names show an error while leaving the current dataset in place. Only layers using the matching source are added above the street basemap; stylesheet backgrounds and unrelated sources are skipped.
 
 Use **Inspect Header** to view the FlatGeobuf file's **Parsed header content**, including column definitions, geometry type, bounds, feature count, spatial index node size, and CRS. Objects and arrays appear as an expandable tree; click a branch or focus it and press Enter or Space to toggle it. The panel scrolls to show long values, and reopening it expands every branch again. It shares the panel with **Inspect GeoJSON** and **Inspect Map Style**.
 

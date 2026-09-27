@@ -43,6 +43,7 @@ body {
 
 .inspector-toggle,
 .map-status,
+.upload-panel,
 .inspector-panel {
   box-sizing: border-box;
   pointer-events: auto;
@@ -84,6 +85,44 @@ body {
   font-family: ui-monospace, monospace;
   font-size: 13px;
   line-height: 1.5;
+}
+
+.upload-panel {
+  width: min(440px, 100%);
+  min-height: 0;
+  padding: 14px;
+  overflow: auto;
+  font-size: 14px;
+}
+
+.upload-panel p {
+  margin: 0 0 12px;
+}
+
+.upload-panel fieldset {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.upload-panel label {
+  display: grid;
+  gap: 6px;
+}
+
+.upload-panel input {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+}
+
+.upload-panel [role='alert'] {
+  margin: 12px 0 0;
+  color: #b91c1c;
+  overflow-wrap: anywhere;
 }
 
 .obstacle-popup .maplibregl-popup-content {
