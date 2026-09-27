@@ -11,7 +11,8 @@ GeoFlatpack is a tool for converting `.gml` files into a FlatGeobuf file. With a
 From the repository root, compile the CLI:
 
 ```zsh
-go build -C GeoFlatpack -o ../GeoFlatpack.exe  
+cd GeoFlatpack/
+go build -o .
 ```
 
 Then run it:
@@ -74,5 +75,5 @@ The `web/` directory contains a browser-based MapLibre example. See the [web REA
 - [x] Parse FGB
 - [x] Web demo
 - [x] Generate MapLibre stylesheet
-- [x] User input for maplibre stylesheet
+- [ ] User input for maplibre stylesheet
 - [ ] Symbology support
