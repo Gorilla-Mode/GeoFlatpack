@@ -11,7 +11,8 @@ GeoFlatpack is a tool for converting `.gml` files into a FlatGeobuf file. With a
 From the repository root, compile the CLI:
 
 ```zsh
-go build -C GeoFlatpack -o ../GeoFlatpack.exe  
+cd GeoFlatpack/
+go build -o .
 ```
 
 Then run it:
