@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,8 +133,18 @@ func main() {
 	}
 
 	if *writeStyle {
+		groups, err := maplibre.CollectStyleGroups(LoadedFgb, "kind")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		paints, err := maplibre.PromptPaints(groups, os.Stdin, os.Stderr)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		style, err := maplibre.BuildMapLibreStyle(
-			LoadedFgb, filepath.Base(output), "", "kind", maplibre.TestPaints,
+			LoadedFgb, filepath.Base(output), "", "kind", paints,
 		)
 
 		if err != nil {
