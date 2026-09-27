@@ -95,6 +95,11 @@ body {
   font-size: 14px;
 }
 
+.inspector-json {
+  margin: 0;
+  font: inherit;
+}
+
 .upload-panel p {
   margin: 0 0 12px;
 }

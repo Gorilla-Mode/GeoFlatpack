@@ -1,346 +1,212 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SubmitEvent } from 'react';
 import { Map, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl';
 import type { MapMouseEvent, StyleSpecification } from 'maplibre-gl';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import { deserialize } from 'flatgeobuf/lib/mjs/geojson.js';
 import type { HeaderMeta } from 'flatgeobuf/lib/mjs/header-meta.js';
-import type { FeatureCollection } from 'geojson';
 import HeaderTree from './HeaderTree';
-import { getSourceName, readDataset } from './dataset';
+import { decodeFgb, getBounds, getSourceName, readDataset } from './dataset';
 import type { Dataset } from './dataset';
 import sampleStyleJson from '../../test_data/sample-obstacles.maplibre.json';
 
-// Keep the original filename separate from Vite's hashed production asset URL.
+// Use the original filename, not Vite's hashed asset URL, for source naming.
 const [[samplePath, sampleUrl]] = Object.entries(import.meta.glob<string>(
   '../../test_data/sample-obstacles.fgb',
   { eager: true, query: '?url', import: 'default' },
 ));
-
-// JSON imports widen literal types and coordinate tuples.
 const sampleStyle = sampleStyleJson as unknown as StyleSpecification;
-
-type Bounds = [[number, number], [number, number]];
-
-function getFeatureCollectionBounds(data: FeatureCollection): Bounds | null {
-  let west = Infinity;
-  let south = Infinity;
-  let east = -Infinity;
-  let north = -Infinity;
-
-  function visit(value: unknown): void {
-    if (!Array.isArray(value)) return;
-    if (value.length >= 2 && typeof value[0] === 'number' && typeof value[1] === 'number') {
-      const [longitude, latitude] = value;
-      if (Number.isFinite(longitude) && Number.isFinite(latitude)) {
-        west = Math.min(west, longitude);
-        south = Math.min(south, latitude);
-        east = Math.max(east, longitude);
-        north = Math.max(north, latitude);
-      }
-      return;
-    }
-    for (const child of value) visit(child);
-  }
-
-  function visitGeometry(geometry: unknown): void {
-    if (!geometry || typeof geometry !== 'object') return;
-    const candidate = geometry as { type?: string; coordinates?: unknown; geometries?: unknown[] };
-    if (candidate.type === 'GeometryCollection') {
-      candidate.geometries?.forEach(visitGeometry);
-    } else {
-      visit(candidate.coordinates);
-    }
-  }
-
-  for (const feature of data.features) visitGeometry(feature.geometry);
-  return Number.isFinite(west) ? [[west, south], [east, north]] : null;
-}
-
-// Let Vite bundle the worker and its imports for development and production.
+const inspectors = { header: 'Header', geojson: 'GeoJSON', style: 'Map Style' } as const;
+const fileFields = { fgb: ['FlatGeobuf file', '.fgb'], style: ['MapLibre stylesheet', '.json,application/json'] } as const;
 setWorkerUrl(mapWorkerUrl);
 
 export default function App() {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
-  const [loading, setLoading] = useState(true);
+  const sampleRequest = useRef<AbortController | null>(null);
+  const uploadRequest = useRef(0);
+  const uploadButton = useRef<HTMLButtonElement>(null);
+  const [dataset, setDataset] = useState<(Dataset & { autoCenter?: boolean }) | null>(null);
+  const [partialHeader, setPartialHeader] = useState<HeaderMeta | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [geojson, setGeojson] = useState<FeatureCollection | null>(null);
-  const [header, setHeader] = useState<HeaderMeta | null>(null);
-  const [bounds, setBounds] = useState<Bounds | null>(null);
-  const [inspecting, setInspecting] = useState<'geojson' | 'style' | 'header' | null>(null);
-  const [dataset, setDataset] = useState<Dataset | null>(null);
+  const [inspecting, setInspecting] = useState<keyof typeof inspectors | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [fgbFile, setFgbFile] = useState<File | null>(null);
-  const [styleFile, setStyleFile] = useState<File | null>(null);
-  const uploadRequest = useRef(0);
-  const uploadButton = useRef<HTMLButtonElement>(null);
-  const activeStyle = dataset?.style ?? sampleStyle;
+  const [files, setFiles] = useState<Partial<Record<keyof typeof fileFields, File>>>({});
   const filename = dataset?.filename ?? samplePath.slice(samplePath.lastIndexOf('/') + 1);
+  const views = { header: dataset ? dataset.header : partialHeader, geojson: dataset?.data, style: dataset?.style ?? sampleStyle };
+  const bounds = useMemo(() => dataset && getBounds(dataset.data), [dataset]);
 
-  useEffect(() => () => { uploadRequest.current++; }, []);
+  function centerMap(duration = 0) {
+    if (bounds) mapRef.current?.fitBounds(bounds, { padding: 48, maxZoom: 18, duration, bearing: 0, pitch: 0 });
+  }
 
   async function uploadFiles(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!fgbFile || !styleFile || uploading) return;
+    if (!files.fgb || !files.style || uploading) return;
     const request = ++uploadRequest.current;
     setUploading(true);
     setUploadError(null);
     try {
-      const next = await readDataset(fgbFile, styleFile);
+      const next = await readDataset(files.fgb, files.style);
       if (request !== uploadRequest.current) return;
-      setDataset(next);
+      sampleRequest.current?.abort();
+      setDataset({ ...next, autoCenter: true });
+      setError(null);
       setUploadOpen(false);
-      uploadButton.current?.focus();
     } catch (cause) {
-      if (request !== uploadRequest.current) return;
-      setUploadError(cause instanceof Error ? cause.message : 'Unable to load these files.');
+      if (request === uploadRequest.current) setUploadError(cause instanceof Error ? cause.message : 'Unable to load these files.');
     } finally {
       if (request === uploadRequest.current) setUploading(false);
     }
   }
 
   useEffect(() => {
-    if (!container.current) return;
+    if (!uploadOpen && !uploading && dataset?.autoCenter) uploadButton.current?.focus();
+  }, [uploadOpen, uploading, dataset]);
 
+  useEffect(() => {
     const controller = new AbortController();
-    const style = dataset?.style ?? sampleStyle;
-    const sourceId = getSourceName(dataset?.filename ?? samplePath);
+    sampleRequest.current = controller;
+    setMapReady(false);
     let map: Map;
-    setLoading(true);
-    setError(null);
-    setGeojson(null);
-    setHeader(null);
-    setBounds(null);
-
     try {
-      map = new Map({
-        container: container.current,
-        style: 'https://tiles.openfreemap.org/styles/liberty',
-        center: style.center,
-        zoom: style.zoom,
-      });
+      map = new Map({ container: container.current!, style: 'https://tiles.openfreemap.org/styles/liberty', center: sampleStyle.center, zoom: sampleStyle.zoom });
     } catch {
       setError('Unable to start the map. Check that WebGL is available in your browser.');
-      setLoading(false);
-      return;
+      return () => { controller.abort(); uploadRequest.current++; };
     }
     mapRef.current = map;
-
     map.addControl(new NavigationControl(), 'top-right');
-    const popup = new Popup({
-      className: 'obstacle-popup',
-      closeOnClick: false,
-      maxWidth: 'min(360px, calc(100vw - 48px))',
-    });
-    let removeObstacleInteractions = () => {};
-    map.on('error', () => {
-      if (!controller.signal.aborted) {
-        setError('Some map resources could not be loaded. Check your connection and reload.');
-      }
-    });
-    const ready = new Promise<void>((resolve) => map.once('load', () => resolve()));
+    map.on('load', () => setMapReady(true));
+    map.on('error', () => setError('Some map resources could not be loaded. Check your connection and reload.'));
 
-    async function loadData() {
+    async function loadSample() {
       try {
-        let data: FeatureCollection;
-        if (dataset) {
-          data = dataset.data;
-          setHeader(dataset.header);
-        } else {
-          const response = await fetch(sampleUrl, { signal: controller.signal });
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-          const bytes = new Uint8Array(await response.arrayBuffer());
-          data = { type: 'FeatureCollection', features: [] };
-          for await (const feature of deserialize(bytes, {
-            headerMetaFn: (metadata) => {
-              if (!controller.signal.aborted) setHeader(metadata);
-            },
-          })) {
-            if (controller.signal.aborted) return;
-            data.features.push(feature);
-          }
-        }
-        if (controller.signal.aborted) return;
-        setGeojson(data);
-
-        await ready;
-        if (controller.signal.aborted) return;
-
-        if (map.getSource(sourceId)) throw new Error(`Source "${sourceId}" conflicts with the basemap.`);
-        map.addSource(sourceId, { ...style.sources[sourceId], type: 'geojson', data });
-        const obstacleLayerIds: string[] = [];
-        // Backgrounds and unrelated sources would replace or obscure the basemap.
-        for (const layer of style.layers) {
-          if ('source' in layer && layer.source === sourceId) {
-            map.addLayer({ ...layer, id: `geoflatpack-${layer.id}`, source: sourceId });
-            obstacleLayerIds.push(`geoflatpack-${layer.id}`);
-          }
-        }
-        const dataBounds = getFeatureCollectionBounds(data);
-        if (obstacleLayerIds.length > 0 && dataBounds) setBounds(dataBounds);
-        if (dataset && dataBounds) {
-          map.fitBounds(dataBounds, { padding: 48, maxZoom: 18, duration: 0 });
-        }
-
-        function findObstacle(event: MapMouseEvent) {
-          const { x, y } = event.point;
-          const hit = map.queryRenderedFeatures(
-            [[x - 4, y - 4], [x + 4, y + 4]],
-            { layers: obstacleLayerIds },
-          )[0];
-          return hit && data.features.find((feature) => feature.id === hit.id);
-        }
-
-        function showObstacle(event: MapMouseEvent) {
-          popup.remove();
-          const feature = findObstacle(event);
-          if (!feature) return;
-
-          const content = document.createElement('div');
-          const title = document.createElement('h2');
-          title.className = 'obstacle-popup-title';
-          title.textContent = 'Feature properties';
-          const properties = document.createElement('pre');
-          properties.className = 'obstacle-properties';
-          properties.tabIndex = 0;
-          properties.setAttribute('aria-label', 'Feature properties');
-          properties.textContent = JSON.stringify(feature.properties, null, 2);
-          content.append(title, properties);
-          popup.setLngLat(event.lngLat).setDOMContent(content).addTo(map);
-        }
-
-        function updateCursor(event: MapMouseEvent) {
-          map.getCanvas().style.cursor = findObstacle(event) ? 'pointer' : '';
-        }
-
-        function resetCursor() {
-          map.getCanvas().style.cursor = '';
-        }
-
-        map.on('click', showObstacle);
-        map.on('mousemove', updateCursor);
-        map.getCanvas().addEventListener('mouseleave', resetCursor);
-        removeObstacleInteractions = () => {
-          map.off('click', showObstacle);
-          map.off('mousemove', updateCursor);
-          map.getCanvas().removeEventListener('mouseleave', resetCursor);
-          resetCursor();
-        };
-        setLoading(false);
+        const response = await fetch(sampleUrl, { signal: controller.signal });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const decoded = await decodeFgb(await response.arrayBuffer(), controller.signal, setPartialHeader);
+        if (!controller.signal.aborted) setDataset({ filename: samplePath.split('/').pop()!, style: sampleStyle, ...decoded });
       } catch (cause) {
-        if (controller.signal.aborted) return;
-        const detail = cause instanceof Error ? ` (${cause.message})` : '';
-        setError(`Unable to display ${dataset?.filename ?? 'the sample obstacles'}${detail}. Try loading the files again.`);
-        setLoading(false);
+        if (!controller.signal.aborted) setError(`Unable to display the sample obstacles (${cause instanceof Error ? cause.message : cause}). Try loading the files again.`);
       }
     }
-
-    void loadData();
+    void loadSample();
     return () => {
       controller.abort();
-      removeObstacleInteractions();
-      popup.remove();
+      uploadRequest.current++;
       map.remove();
-      if (mapRef.current === map) mapRef.current = null;
+      mapRef.current = null;
     };
-  }, [dataset]);
+  }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady || !dataset) return;
+    const { data, style } = dataset;
+    const sourceId = getSourceName(dataset.filename);
+    const layerIds: string[] = [];
+    const popup = new Popup({ className: 'obstacle-popup', closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 48px))' });
+    let sourceAdded = false;
+
+    function findFeature({ point: { x, y } }: MapMouseEvent) {
+      const hit = map!.queryRenderedFeatures([[x - 4, y - 4], [x + 4, y + 4]], { layers: layerIds })[0];
+      return hit && data.features.find(feature => feature.id === hit.id);
+    }
+    function showFeature(event: MapMouseEvent) {
+      popup.remove();
+      const feature = findFeature(event);
+      if (!feature) return;
+      const content = document.createElement('div');
+      const title = Object.assign(document.createElement('h2'), { className: 'obstacle-popup-title', textContent: 'Feature properties' });
+      const properties = Object.assign(document.createElement('pre'), {
+        className: 'obstacle-properties', tabIndex: 0, textContent: JSON.stringify(feature.properties, null, 2),
+      });
+      properties.setAttribute('aria-label', 'Feature properties');
+      content.append(title, properties);
+      popup.setLngLat(event.lngLat).setDOMContent(content).addTo(map!);
+    }
+    function updateCursor(event: MapMouseEvent) {
+      map!.getCanvas().style.cursor = findFeature(event) ? 'pointer' : '';
+    }
+    function resetCursor() { map!.getCanvas().style.cursor = ''; }
+
+    try {
+      if (map.getSource(sourceId)) throw new Error(`Source "${sourceId}" conflicts with the basemap.`);
+      map.addSource(sourceId, { ...style.sources[sourceId], type: 'geojson', data });
+      sourceAdded = true;
+      // Only the matching source's layers belong above the street basemap.
+      for (const layer of style.layers) {
+        if ('source' in layer && layer.source === sourceId) {
+          const id = `geoflatpack-${layer.id}`;
+          map.addLayer({ ...layer, id, source: sourceId });
+          layerIds.push(id);
+        }
+      }
+      if (dataset.autoCenter) centerMap();
+      map.on('click', showFeature);
+      map.on('mousemove', updateCursor);
+      map.getCanvas().addEventListener('mouseleave', resetCursor);
+    } catch (cause) {
+      setError(`Unable to display ${dataset.filename} (${cause instanceof Error ? cause.message : cause}). Try loading the files again.`);
+    }
+    return () => {
+      popup.remove();
+      map.off('click', showFeature);
+      map.off('mousemove', updateCursor);
+      map.getCanvas().removeEventListener('mouseleave', resetCursor);
+      resetCursor();
+      if (mapRef.current !== map) return; // Map teardown already removed its layers and source.
+      for (const id of layerIds) if (map.getLayer(id)) map.removeLayer(id);
+      if (sourceAdded && map.getSource(sourceId)) map.removeSource(sourceId);
+    };
+  }, [dataset, mapReady]);
 
   return (
     <main>
       <div ref={container} className="map" aria-label={`Map of ${filename}`} />
       <div className="map-overlay">
         <div className="inspector-controls">
-          <button
-            ref={uploadButton}
-            type="button"
-            className="inspector-toggle"
-            aria-expanded={uploadOpen}
-            aria-controls="upload-panel"
-            disabled={uploading}
-            onClick={() => {
-              if (!uploadOpen) {
-                setFgbFile(null);
-                setStyleFile(null);
-                setUploadError(null);
-              }
+          <button ref={uploadButton} type="button" className="inspector-toggle" disabled={uploading}
+            aria-expanded={uploadOpen} aria-controls="upload-panel" onClick={() => {
+              setFiles({});
+              setUploadError(null);
               setUploadOpen(open => !open);
-            }}
-          >
+            }}>
             Upload files
           </button>
-          <button
-            type="button"
-            className="inspector-toggle"
-            disabled={bounds === null || mapRef.current === null}
-            onClick={() => {
-              const map = mapRef.current;
-              if (!map || !bounds) return;
-              const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-              map.fitBounds(bounds, {
-                padding: 48,
-                maxZoom: 18,
-                duration: reducedMotion ? 0 : 500,
-                bearing: 0,
-                pitch: 0,
-              });
-            }}
-          >
+          <button type="button" className="inspector-toggle" disabled={!bounds || !mapReady}
+            onClick={() => centerMap(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 500)}>
             Center on bbox
           </button>
-          <button
-            type="button"
-            className="inspector-toggle"
-            disabled={header === null}
-            aria-expanded={inspecting === 'header'}
-            aria-controls="inspector-panel"
-            onClick={() => setInspecting((active) => active === 'header' ? null : 'header')}
-          >
-            {inspecting === 'header' ? 'Hide Header' : 'Inspect Header'}
-          </button>
-          <button
-            type="button"
-            className="inspector-toggle"
-            disabled={geojson === null}
-            aria-expanded={inspecting === 'geojson'}
-            aria-controls="inspector-panel"
-            onClick={() => setInspecting((active) => active === 'geojson' ? null : 'geojson')}
-          >
-            {inspecting === 'geojson' ? 'Hide GeoJSON' : 'Inspect GeoJSON'}
-          </button>
-          <button
-            type="button"
-            className="inspector-toggle"
-            aria-expanded={inspecting === 'style'}
-            aria-controls="inspector-panel"
-            onClick={() => setInspecting((active) => active === 'style' ? null : 'style')}
-          >
-            {inspecting === 'style' ? 'Hide Map Style' : 'Inspect Map Style'}
-          </button>
+          {Object.entries(inspectors).map(([key, label]) => {
+            const view = key as keyof typeof inspectors;
+            return (
+              <button key={view} type="button" className="inspector-toggle" disabled={!views[view]}
+                aria-expanded={inspecting === view} aria-controls="inspector-panel"
+                onClick={() => setInspecting(active => active === view ? null : view)}>
+                {inspecting === view ? 'Hide' : 'Inspect'} {label}
+              </button>
+            );
+          })}
         </div>
         {uploadOpen && (
           <form id="upload-panel" className="upload-panel" onSubmit={uploadFiles} aria-label="Upload map files">
             <p>Choose a FlatGeobuf file and its MapLibre JSON stylesheet. Files are read locally in your browser.</p>
             <p>The style source must match the FGB filename without its extension.</p>
             <fieldset disabled={uploading}>
-              <label>
-                FlatGeobuf file
-                <input type="file" accept=".fgb" required onChange={event => {
-                  setFgbFile(event.target.files?.[0] ?? null);
-                  setUploadError(null);
-                }} />
-              </label>
-              <label>
-                MapLibre stylesheet
-                <input type="file" accept=".json,application/json" required onChange={event => {
-                  setStyleFile(event.target.files?.[0] ?? null);
-                  setUploadError(null);
-                }} />
-              </label>
-              <button type="submit" className="inspector-toggle" disabled={!fgbFile || !styleFile}>
+              {Object.entries(fileFields).map(([key, [label, accept]]) => (
+                <label key={key}>
+                  {label}
+                  <input type="file" accept={accept} required onChange={event => {
+                    const file = event.target.files?.[0];
+                    setFiles(current => ({ ...current, [key]: file }));
+                    setUploadError(null);
+                  }} />
+                </label>
+              ))}
+              <button type="submit" className="inspector-toggle" disabled={!files.fgb || !files.style}>
                 {uploading ? 'Reading files…' : 'Display on map'}
               </button>
             </fieldset>
@@ -348,33 +214,20 @@ export default function App() {
             {uploadError && <p role="alert">{uploadError}</p>}
           </form>
         )}
-        {(loading || error) && (
+        {(!dataset || !mapReady || error) && (
           <div className="map-status" role={error ? 'alert' : 'status'}>
             {error ?? `Loading map and ${filename}…`}
           </div>
         )}
-        {(inspecting === 'style' || (inspecting === 'geojson' && geojson !== null)) && (
-          <pre
-            key={inspecting}
-            id="inspector-panel"
-            className="inspector-panel"
-            tabIndex={0}
-            aria-label={inspecting === 'geojson' ? 'Decoded GeoJSON' : 'Map style JSON source'}
-          >
-            {JSON.stringify(inspecting === 'geojson' ? geojson : activeStyle, null, 2)}
-          </pre>
-        )}
-        {inspecting === 'header' && header !== null && (
-          <section
-            id="inspector-panel"
-            className="inspector-panel"
-            tabIndex={0}
-            aria-labelledby="header-panel-title"
-          >
-            <h2 id="header-panel-title" className="header-panel-title">Parsed header content</h2>
-            <div className="header-tree">
-              <HeaderTree value={header} />
-            </div>
+        {inspecting && views[inspecting] && (
+          <section key={inspecting} id="inspector-panel" className="inspector-panel" tabIndex={0}
+            aria-label={inspecting === 'header' ? 'Parsed header content' : inspecting === 'geojson' ? 'Decoded GeoJSON' : 'Map style JSON source'}>
+            {inspecting === 'header' ? (
+              <>
+                <h2 className="header-panel-title">Parsed header content</h2>
+                <div className="header-tree"><HeaderTree value={views.header} /></div>
+              </>
+            ) : <pre className="inspector-json">{JSON.stringify(views[inspecting], null, 2)}</pre>}
           </section>
         )}
       </div>
