@@ -20,6 +20,8 @@ func main() {
 	outputDir := flag.String("o", "", "Path to the output directory")
 	formatFlag := flag.String("f", string(validate.FormatMapLibre), "Output format: maplibre or sld")
 	verbose := flag.Bool("v", false, "Verbose output")
+	writeFgb := flag.Bool("write-fgb", true, "Write the FlatGeobuf output file")
+	writeStyle := flag.Bool("write-style", true, "Write the generated stylesheet output file")
 
 	flag.Usage = func() {
 		_, _ = fmt.Fprintln(os.Stderr, "Usage gfp -i <input file> -f <stylesheet format> -o <output directory>")
@@ -60,8 +62,10 @@ func main() {
 		output += ".fgb"
 	}
 
-	if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "gfp:", err)
+	if *writeFgb || *writeStyle {
+		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "gfp:", err)
+		}
 	}
 
 	if *verbose {
@@ -109,41 +113,48 @@ func main() {
 		fmt.Println("\ngfp: inspecting FlatGeobuf...")
 		s := strings.TrimSuffix(fgb.InspectFgb(LoadedFgb), "\n")
 		fmt.Printf("\t%s\n", strings.ReplaceAll(s, "\n", "\n\t"))
-		fmt.Println("\ngfp: writing FlatGeobuf to", output, "...")
 	}
 
-	err = convert.WriteFgb(memoryFGB, output)
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to write FlatGeobuf:", err)
-		os.Exit(1)
+	if *writeFgb {
+		if *verbose {
+			fmt.Println("\ngfp: writing FlatGeobuf to", output, "...")
+		}
+
+		err = convert.WriteFgb(memoryFGB, output)
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to write FlatGeobuf:", err)
+			os.Exit(1)
+		}
+
+		if *verbose {
+			fmt.Println("gfp: FlatGeobuf written to", output)
+		}
 	}
 
-	if *verbose {
-		fmt.Println("gfp: FlatGeobuf written to", output)
-	}
+	if *writeStyle {
+		style, err := maplibre.BuildMapLibreStyle(
+			LoadedFgb, filepath.Base(output), "", "kind", maplibre.TestPaints,
+		)
 
-	style, err := maplibre.BuildMapLibreStyle(
-		LoadedFgb, filepath.Base(output), "", "kind", maplibre.TestPaints,
-	)
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to build MapLibre style:", err)
+			os.Exit(1)
+		}
 
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to build MapLibre style:", err)
-		os.Exit(1)
-	}
+		styleJSON, err := json.MarshalIndent(style, "", "  ")
+		if err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to marshal MapLibre style:", err)
+			os.Exit(1)
+		}
 
-	styleJSON, err := json.MarshalIndent(style, "", "  ")
-	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to marshal MapLibre style:", err)
-		os.Exit(1)
-	}
+		styleOutput := strings.TrimSuffix(output, filepath.Ext(output)) + ".gen.maplibre.json"
+		if err := os.WriteFile(styleOutput, styleJSON, 0644); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to write MapLibre style:", err)
+			os.Exit(1)
+		}
 
-	styleOutput := strings.TrimSuffix(output, filepath.Ext(output)) + ".gen.maplibre.json"
-	if err := os.WriteFile(styleOutput, styleJSON, 0644); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, "gfp: failed to write MapLibre style:", err)
-		os.Exit(1)
-	}
-
-	if *verbose {
-		fmt.Println("gfp: MapLibre style written to", styleOutput)
+		if *verbose {
+			fmt.Println("gfp: MapLibre style written to", styleOutput)
+		}
 	}
 }
