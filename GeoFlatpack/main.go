@@ -3,6 +3,7 @@ package main
 import (
 	"GeoFlatpack/convert"
 	"GeoFlatpack/fgb"
+	"GeoFlatpack/internal/cli"
 	"GeoFlatpack/style/maplibre"
 	"GeoFlatpack/validate"
 	"encoding/json"
@@ -138,7 +139,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		paints, err := maplibre.PromptPaints(groups, os.Stdin, os.Stderr)
+		paints, err := cli.PromptPaints(groups, os.Stdin, os.Stderr)
 		if err != nil {
 			log.Fatal(err)
 		}
