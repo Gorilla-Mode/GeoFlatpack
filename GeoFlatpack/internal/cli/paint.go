@@ -15,22 +15,31 @@ func promptLine(
 	out io.Writer,
 	prompt string,
 ) (string, error) {
+	line, err := promptRawLine(scanner, out, prompt)
+	return strings.TrimSpace(line), err
+}
+
+func promptRawLine(
+	scanner *bufio.Scanner,
+	out io.Writer,
+	prompt string,
+) (string, error) {
 	if _, err := fmt.Fprint(out, prompt); err != nil {
 		return "", err
 	}
 
 	if scanner.Scan() {
-		return strings.TrimSpace(scanner.Text()), nil
+		return scanner.Text(), nil
 	}
 	if err := scanner.Err(); err != nil {
 		return "", err
 	}
-	return "", io.EOF
+	return "", fmt.Errorf("input ended while waiting for an answer: %w", io.EOF)
 }
 
 func PromptPaints(
 	groups []maplibre.StyleGroup,
-	in io.Reader,
+	scanner *bufio.Scanner,
 	out io.Writer,
 ) (map[maplibre.StyleGroup]maplibre.Paint, error) {
 	spec, err := maplibre.LoadSpec()
@@ -43,9 +52,6 @@ func PromptPaints(
 		maplibre.Line:    "line",
 		maplibre.Polygon: "fill",
 	}
-
-	scanner := bufio.NewScanner(in)
-	scanner.Buffer(make([]byte, 4096), 1024*1024)
 
 	paints := make(map[maplibre.StyleGroup]maplibre.Paint)
 

@@ -107,7 +107,7 @@ func main() {
 
 	LoadedFgb, err := fgb.LoadFgb(src)
 	if err != nil {
-		return
+		log.Fatal("gfp: failed to load FlatGeobuf: ", err)
 	}
 
 	if *verbose {
@@ -134,18 +134,13 @@ func main() {
 	}
 
 	if *writeStyle {
-		groups, err := maplibre.CollectStyleGroups(LoadedFgb, "kind")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		paints, err := cli.PromptPaints(groups, os.Stdin, os.Stderr)
+		field, paints, err := cli.PromptStyle(LoadedFgb, os.Stdin, os.Stderr)
 		if err != nil {
 			log.Fatal(err)
 		}
 
 		style, err := maplibre.BuildMapLibreStyle(
-			LoadedFgb, filepath.Base(output), "", "kind", paints,
+			LoadedFgb, filepath.Base(output), "", field, paints,
 		)
 
 		if err != nil {

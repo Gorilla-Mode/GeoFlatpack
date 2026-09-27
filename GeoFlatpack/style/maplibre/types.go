@@ -11,7 +11,7 @@ const (
 
 type StyleGroup struct {
 	GeometryType GeometryType
-	Category     string
+	Category     CategoryValue
 }
 
 type StyleLayer struct {

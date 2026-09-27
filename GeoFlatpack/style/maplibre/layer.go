@@ -22,7 +22,8 @@ func newLayer(
 		filter = []any{
 			"all",
 			filter,
-			[]any{"==", []any{"get", field}, group.Category},
+			// A missing property evaluates to null, combining missing and null values.
+			[]any{"==", []any{"get", field}, group.Category.FilterValue()},
 		}
 	}
 
@@ -87,11 +88,9 @@ func CollectStyleGroups(fgb *fgb.Fgb, field string) ([]StyleGroup, error) {
 		}
 
 		if field != "" {
-			category, ok := feature.Properties[field].(string)
-			if !ok {
-				return nil, fmt.Errorf(
-					"feature %d: %q must contain a string category", i+1, field,
-				)
+			category, err := NewCategoryValue(feature.Properties[field])
+			if err != nil {
+				return nil, fmt.Errorf("feature %d, field %q: %w", i+1, field, err)
 			}
 			group.Category = category
 		}
@@ -109,7 +108,7 @@ func CollectStyleGroups(fgb *fgb.Fgb, field string) ([]StyleGroup, error) {
 		if groups[i].GeometryType != groups[j].GeometryType {
 			return order[string(groups[i].GeometryType)] < order[string(groups[j].GeometryType)]
 		}
-		return groups[i].Category < groups[j].Category
+		return categoryLess(groups[i].Category, groups[j].Category)
 	})
 
 	return groups, nil
