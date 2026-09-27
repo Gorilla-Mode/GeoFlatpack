@@ -15,7 +15,12 @@ const [[samplePath, sampleUrl]] = Object.entries(import.meta.glob<string>(
   { eager: true, query: '?url', import: 'default' },
 ));
 const sampleStyle = sampleStyleJson as unknown as StyleSpecification;
-const inspectors = { header: 'Header', geojson: 'GeoJSON', style: 'Map Style' } as const;
+const sampleFilename = samplePath.slice(samplePath.lastIndexOf('/') + 1);
+const inspectors = [
+  { key: 'header', label: 'Header', title: 'Parsed header and features' },
+  { key: 'geojson', label: 'GeoJSON', title: 'Decoded GeoJSON' },
+  { key: 'style', label: 'Map Style', title: 'Map style JSON source' },
+] as const;
 const fileFields = { fgb: ['FlatGeobuf file', '.fgb'], style: ['MapLibre stylesheet', '.json,application/json'] } as const;
 setWorkerUrl(mapWorkerUrl);
 
@@ -29,12 +34,12 @@ export default function App() {
   const [partialHeader, setPartialHeader] = useState<DatasetHeader | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [inspecting, setInspecting] = useState<keyof typeof inspectors | null>(null);
+  const [inspecting, setInspecting] = useState<(typeof inspectors)[number] | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [files, setFiles] = useState<Partial<Record<keyof typeof fileFields, File>>>({});
-  const filename = dataset?.filename ?? samplePath.slice(samplePath.lastIndexOf('/') + 1);
+  const filename = dataset?.filename ?? sampleFilename;
   const inspection = useMemo(() => createInspection(dataset ? dataset.header : partialHeader, dataset?.data), [dataset, partialHeader]);
   const views = { header: inspection, geojson: dataset?.data, style: dataset?.style ?? sampleStyle };
   const bounds = useMemo(() => dataset && getBounds(dataset.data), [dataset]);
@@ -88,7 +93,7 @@ export default function App() {
         const response = await fetch(sampleUrl, { signal: controller.signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const decoded = await decodeFgb(await response.arrayBuffer(), controller.signal, setPartialHeader);
-        if (!controller.signal.aborted) setDataset({ filename: samplePath.split('/').pop()!, style: sampleStyle, ...decoded });
+        if (!controller.signal.aborted) setDataset({ filename: sampleFilename, style: sampleStyle, ...decoded });
       } catch (cause) {
         if (!controller.signal.aborted) setError(`Unable to display the sample obstacles (${cause instanceof Error ? cause.message : cause}). Try loading the files again.`);
       }
@@ -109,6 +114,8 @@ export default function App() {
     const sourceId = getSourceName(dataset.filename);
     const layerIds: string[] = [];
     const popup = new Popup({ className: 'obstacle-popup', closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 48px))' });
+    const canvas = map.getCanvas();
+    const events = [['click', showFeature], ['mousemove', updateCursor]] as const;
     let sourceAdded = false;
 
     function findFeature({ point: { x, y } }: MapMouseEvent) {
@@ -129,9 +136,9 @@ export default function App() {
       popup.setLngLat(event.lngLat).setDOMContent(content).addTo(map!);
     }
     function updateCursor(event: MapMouseEvent) {
-      map!.getCanvas().style.cursor = findFeature(event) ? 'pointer' : '';
+      canvas.style.cursor = findFeature(event) ? 'pointer' : '';
     }
-    function resetCursor() { map!.getCanvas().style.cursor = ''; }
+    function resetCursor() { canvas.style.cursor = ''; }
 
     try {
       if (map.getSource(sourceId)) throw new Error(`Source "${sourceId}" conflicts with the basemap.`);
@@ -139,24 +146,21 @@ export default function App() {
       sourceAdded = true;
       // Only the matching source's layers belong above the street basemap.
       for (const layer of style.layers) {
-        if ('source' in layer && layer.source === sourceId) {
-          const id = `geoflatpack-${layer.id}`;
-          map.addLayer({ ...layer, id, source: sourceId });
-          layerIds.push(id);
-        }
+        if (!('source' in layer) || layer.source !== sourceId) continue;
+        const id = `geoflatpack-${layer.id}`;
+        map.addLayer({ ...layer, id, source: sourceId });
+        layerIds.push(id);
       }
       if (dataset.autoCenter) centerMap();
-      map.on('click', showFeature);
-      map.on('mousemove', updateCursor);
-      map.getCanvas().addEventListener('mouseleave', resetCursor);
+      for (const [event, handler] of events) map.on(event, handler);
+      canvas.addEventListener('mouseleave', resetCursor);
     } catch (cause) {
       setError(`Unable to display ${dataset.filename} (${cause instanceof Error ? cause.message : cause}). Try loading the files again.`);
     }
     return () => {
       popup.remove();
-      map.off('click', showFeature);
-      map.off('mousemove', updateCursor);
-      map.getCanvas().removeEventListener('mouseleave', resetCursor);
+      for (const [event, handler] of events) map.off(event, handler);
+      canvas.removeEventListener('mouseleave', resetCursor);
       resetCursor();
       if (mapRef.current !== map) return; // Map teardown already removed its layers and source.
       for (const id of layerIds) if (map.getLayer(id)) map.removeLayer(id);
@@ -181,16 +185,13 @@ export default function App() {
             onClick={() => centerMap(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 500)}>
             Center on bbox
           </button>
-          {Object.entries(inspectors).map(([key, label]) => {
-            const view = key as keyof typeof inspectors;
-            return (
-              <button key={view} type="button" className="inspector-toggle" disabled={!views[view]}
-                aria-expanded={inspecting === view} aria-controls="inspector-panel"
-                onClick={() => setInspecting(active => active === view ? null : view)}>
-                {inspecting === view ? 'Hide' : 'Inspect'} {label}
-              </button>
-            );
-          })}
+          {inspectors.map(view => (
+            <button key={view.key} type="button" className="inspector-toggle" disabled={!views[view.key]}
+              aria-expanded={inspecting === view} aria-controls="inspector-panel"
+              onClick={() => setInspecting(active => active === view ? null : view)}>
+              {inspecting === view ? 'Hide' : 'Inspect'} {view.label}
+            </button>
+          ))}
         </div>
         {uploadOpen && (
           <form id="upload-panel" className="upload-panel" onSubmit={uploadFiles} aria-label="Upload map files">
@@ -220,15 +221,15 @@ export default function App() {
             {error ?? `Loading map and ${filename}…`}
           </div>
         )}
-        {inspecting && views[inspecting] && (
-          <section key={inspecting} id="inspector-panel" className="inspector-panel" tabIndex={0}
-            aria-label={inspecting === 'header' ? 'Parsed header and features' : inspecting === 'geojson' ? 'Decoded GeoJSON' : 'Map style JSON source'}>
-            {inspecting === 'header' ? (
+        {inspecting && views[inspecting.key] && (
+          <section key={inspecting.key} id="inspector-panel" className="inspector-panel" tabIndex={0}
+            aria-label={inspecting.title}>
+            {inspecting.key === 'header' ? (
               <>
-                <h2 className="header-panel-title">Parsed header and features</h2>
+                <h2 className="header-panel-title">{inspecting.title}</h2>
                 <div className="header-tree"><HeaderTree value={views.header} /></div>
               </>
-            ) : <pre className="inspector-json">{JSON.stringify(views[inspecting], null, 2)}</pre>}
+            ) : <pre className="inspector-json">{JSON.stringify(views[inspecting.key], null, 2)}</pre>}
           </section>
         )}
       </div>

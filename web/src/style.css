@@ -75,23 +75,26 @@ body {
   font-size: 14px;
 }
 
-.inspector-panel {
-  width: min(560px, 100%);
+.inspector-panel,
+.upload-panel {
   min-height: 0;
-  margin: 0;
   padding: 14px;
   overflow: auto;
+}
+
+.inspector-panel,
+.obstacle-properties {
+  margin: 0;
   overscroll-behavior: contain;
-  font-family: ui-monospace, monospace;
-  font-size: 13px;
-  line-height: 1.5;
+  font: 13px/1.5 ui-monospace, monospace;
+}
+
+.inspector-panel {
+  width: min(560px, 100%);
 }
 
 .upload-panel {
   width: min(440px, 100%);
-  min-height: 0;
-  padding: 14px;
-  overflow: auto;
   font-size: 14px;
 }
 
@@ -137,7 +140,8 @@ body {
   color: #1e293b;
 }
 
-.header-panel-title {
+.header-panel-title,
+.obstacle-popup-title {
   margin: 0 0 10px;
   font: 600 14px system-ui, sans-serif;
 }
@@ -164,16 +168,10 @@ body {
 }
 
 .obstacle-popup-title {
-  margin: 0 20px 10px 0;
-  font: 600 14px system-ui, sans-serif;
+  margin-right: 20px;
 }
 
 .obstacle-properties {
   max-height: min(320px, 50dvh);
-  margin: 0;
   overflow: auto;
-  overscroll-behavior: contain;
-  font-family: ui-monospace, monospace;
-  font-size: 13px;
-  line-height: 1.5;
 }
