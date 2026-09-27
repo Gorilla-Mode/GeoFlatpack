@@ -1,4 +1,4 @@
-ka<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="UTF-8"?>
 <gml:FeatureCollection xmlns:app="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Brannstasjoner/20160315" xmlns:gco="http://www.isotc211.org/2005/gco" xmlns:gmd="http://www.isotc211.org/2005/gmd" xmlns:gml="http://www.opengis.net/gml/3.2" xmlns:gsr="http://www.isotc211.org/2005/gsr" xmlns:gss="http://www.isotc211.org/2005/gss" xmlns:gts="http://www.isotc211.org/2005/gts" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" gml:id="id7505cb77-1d96-4dfd-bb70-55b017efeb55" xsi:schemaLocation="http://skjema.geonorge.no/SOSI/produktspesifikasjon/Brannstasjoner/20160315 http://skjema.geonorge.no/SOSI/produktspesifikasjon/Brannstasjoner/20160315/Brannstasjoner.xsd">
 	<gml:boundedBy>
 		<gml:Envelope srsName="urn:ogc:def:crs:EPSG::25833" srsDimension="2">
