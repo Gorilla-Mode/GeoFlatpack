@@ -1,11 +1,11 @@
 package maplibre
 
 import (
+	"GeoFlatpack/style"
 	"bufio"
 	"fmt"
 	"io"
 	"math"
-	"regexp"
 	"strconv"
 	"strings"
 )
@@ -18,30 +18,25 @@ type paintQuestion struct {
 
 var paintQuestions = map[GeometryType][]paintQuestion{
 	Point: {
-		{"circle-color", "Point color", "#f59e0b", true, 0},
+		{"circle-color", "Point color (R, G, B)", "245, 158, 11", true, 0},
 		{"circle-radius", "Radius in pixels", "6", false, 0},
-		{"circle-stroke-color", "Outline color", "#78350f", true, 0},
+		{"circle-stroke-color", "Outline color (R, G, B)", "120, 53, 15", true, 0},
 		{"circle-stroke-width", "Outline width", "1", false, 0},
 	},
 	Line: {
-		{"line-color", "Line color", "#dc2626", true, 0},
+		{"line-color", "Line color (R, G, B)", "220, 38, 38", true, 0},
 		{"line-width", "Line width in pixels", "3", false, 0},
 	},
 	Polygon: {
-		{"fill-color", "Fill color", "#2563eb", true, 0},
+		{"fill-color", "Fill color (R, G, B)", "37, 99, 235", true, 0},
 		{"fill-opacity", "Fill opacity", "0.55", false, 1},
-		{"fill-outline-color", "Outline color", "#1e3a8a", true, 0},
+		{"fill-outline-color", "Outline color (R, G, B)", "30, 58, 138", true, 0},
 	},
 }
 
-var hexColor = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
-
 func parsePaintAnswer(q paintQuestion, input string) (any, error) {
 	if q.Color {
-		if !hexColor.MatchString(input) {
-			return nil, fmt.Errorf("enter a color such as #2563eb")
-		}
-		return input, nil
+		return style.ParseRGB(input)
 	}
 
 	value, err := strconv.ParseFloat(input, 64)
