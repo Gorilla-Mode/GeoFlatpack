@@ -11,13 +11,13 @@ GeoFlatpack is a tool for converting `.gml` files into a FlatGeobuf file. With a
 From the repository root, compile the CLI:
 
 ```zsh
-(cd GFP && go build -o ../gfp)
+go build -C GeoFlatpack -o ../GeoFlatpack.exe  
 ```
 
 Then run it:
 
 ```zsh
-./gfp -i path/to/map.gml -o path/to/output/ -f maplibre
+./GeoFlatpack -i path/to/map.gml -o path/to/output/ -f maplibre
 ```
 
 | Argument        | Description                                                            | Default    |
@@ -34,14 +34,14 @@ Disable either output with a boolean flag:
 
 ```zsh
 # Style only: writes roads.gen.maplibre.json with roads as the source name
-./gfp -i path/to/map.gml -o path/to/roads.fgb --write-fgb=false
+./GeoFlatpack -i path/to/map.gml -o path/to/roads.fgb --write-fgb=false
 
 # FlatGeobuf only: writes roads.fgb
-./gfp -i path/to/map.gml -o path/to/roads.fgb --write-style=false
+./GeoFlatpack -i path/to/map.gml -o path/to/roads.fgb --write-style=false
 
 # Process the input in memory without creating output files or directories
 # can be combined with verbose output to display the fgb file as text
-./gfp -i path/to/map.gml -o path/to/output/ --write-fgb=false --write-style=false
+./GeoFlatpack -i path/to/map.gml -o path/to/output/ --write-fgb=false --write-style=false
 ```
 
 Disabled outputs leave any existing files untouched. Both flags default to `true`; use `=false` to disable them.
@@ -50,7 +50,7 @@ Disabled outputs leave any existing files untouched. Both flags default to `true
 
 ### Live demo
 
-> Live demo uses the the .fgb and .json files in the `test_data` directory.
+> Live demo uses the .fgb and .json files in the `test_data` directory.
 
 [Open the live demo](https://gorilla-mode.github.io/GeoFlatpack/)
 
