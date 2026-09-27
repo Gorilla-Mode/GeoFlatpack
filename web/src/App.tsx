@@ -30,6 +30,7 @@ const inspectors = [
   { key: 'geojson', label: 'GeoJSON', title: 'Decoded GeoJSON' },
   { key: 'style', label: 'Map Style', title: 'Map style JSON source' },
 ] as const;
+type ActivePanel = 'upload' | 'source' | (typeof inspectors)[number]['key'] | null;
 const fileFields = { fgb: ['FlatGeobuf file', '.fgb'], style: ['MapLibre stylesheet', '.json,application/json'] } as const;
 setWorkerUrl(mapWorkerUrl);
 
@@ -42,7 +43,7 @@ export default function App() {
   const restoreUploadFocus = useRef(false);
   const sourceButton = useRef<HTMLButtonElement>(null);
   const sourcePanel = useRef<HTMLDivElement>(null);
-  const [sourceOpen, setSourceOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [requestedSource, setRequestedSource] = useState(bundledSources[0]);
   const [loadingSource, setLoadingSource] = useState<BundledSource | null>(null);
   const [sourceError, setSourceError] = useState<string | null>(null);
@@ -50,15 +51,20 @@ export default function App() {
   const [partialHeader, setPartialHeader] = useState<DatasetHeader | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [inspecting, setInspecting] = useState<(typeof inspectors)[number] | null>(null);
-  const [uploadOpen, setUploadOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [files, setFiles] = useState<Partial<Record<keyof typeof fileFields, File>>>({});
+  const sourceOpen = activePanel === 'source';
+  const uploadOpen = activePanel === 'upload';
+  const inspecting = inspectors.find(view => view.key === activePanel);
   const filename = dataset?.filename ?? requestedSource.filename;
   const inspection = useMemo(() => createInspection(dataset ? dataset.header : partialHeader, dataset?.data), [dataset, partialHeader]);
   const views = { header: inspection, geojson: dataset?.data, style: dataset?.style ?? requestedSource.style };
   const bounds = useMemo(() => dataset && getBounds(dataset.data), [dataset]);
+
+  function togglePanel(panel: Exclude<ActivePanel, null>) {
+    setActivePanel(active => active === panel ? null : panel);
+  }
 
   function centerMap(duration = 0) {
     if (bounds) mapRef.current?.fitBounds(bounds, { padding: 48, maxZoom: 18, duration, bearing: 0, pitch: 0 });
@@ -95,7 +101,7 @@ export default function App() {
 
   function selectSource(source: BundledSource) {
     if (uploading) return;
-    setSourceOpen(false);
+    setActivePanel(null);
     sourceButton.current?.focus();
     void loadSource(source);
   }
@@ -117,7 +123,6 @@ export default function App() {
       setDataset({ ...next, autoCenter: true });
       setError(null);
       restoreUploadFocus.current = true;
-      setUploadOpen(false);
     } catch (cause) {
       if (request === uploadRequest.current) setUploadError(cause instanceof Error ? cause.message : 'Unable to load these files.');
     } finally {
@@ -126,11 +131,14 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!uploadOpen && !uploading && restoreUploadFocus.current) {
+    if (!uploading && restoreUploadFocus.current) {
       restoreUploadFocus.current = false;
-      uploadButton.current?.focus();
+      if (activePanel === 'upload') {
+        setActivePanel(null);
+        uploadButton.current?.focus();
+      }
     }
-  }, [uploadOpen, uploading]);
+  }, [activePanel, uploading]);
 
   useEffect(() => {
     if (sourceOpen) {
@@ -229,7 +237,7 @@ export default function App() {
       <div className="map-overlay" onKeyDown={event => {
         if (event.key === 'Escape' && sourceOpen) {
           event.preventDefault();
-          setSourceOpen(false);
+          setActivePanel(null);
           sourceButton.current?.focus();
         }
       }}>
@@ -238,16 +246,12 @@ export default function App() {
             aria-expanded={uploadOpen} aria-controls="upload-panel" onClick={() => {
               setFiles({});
               setUploadError(null);
-              setSourceOpen(false);
-              setUploadOpen(open => !open);
+              togglePanel('upload');
             }}>
             Upload files
           </button>
           <button ref={sourceButton} type="button" className="inspector-toggle" disabled={uploading}
-            aria-expanded={sourceOpen} aria-controls="source-panel" onClick={() => {
-              setUploadOpen(false);
-              setSourceOpen(open => !open);
-            }}>
+            aria-expanded={sourceOpen} aria-controls="source-panel" onClick={() => togglePanel('source')}>
             Select source
           </button>
           <button type="button" className="inspector-toggle" disabled={!bounds || !mapReady}
@@ -257,7 +261,7 @@ export default function App() {
           {inspectors.map(view => (
             <button key={view.key} type="button" className="inspector-toggle" disabled={!views[view.key]}
               aria-expanded={inspecting === view} aria-controls="inspector-panel"
-              onClick={() => setInspecting(active => active === view ? null : view)}>
+              onClick={() => togglePanel(view.key)}>
               {inspecting === view ? 'Hide' : 'Inspect'} {view.label}
             </button>
           ))}
