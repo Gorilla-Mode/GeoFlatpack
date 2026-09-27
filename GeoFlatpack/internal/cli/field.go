@@ -13,8 +13,21 @@ import (
 // PromptStyle shares a scanner across field selection and all paint prompts so
 // buffered answers from a pipe are retained.
 func PromptStyle(data *fgb.Fgb, in io.Reader, out io.Writer) (string, map[maplibre.StyleGroup]maplibre.Paint, error) {
+	return PromptStyleWithScanner(data, NewScanner(in), out)
+}
+
+// NewScanner creates the shared scanner for an entire styling session.
+func NewScanner(in io.Reader) *bufio.Scanner {
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 4096), 1024*1024)
+	return scanner
+}
+
+// PromptStyleWithScanner retains buffered answers between input layers.
+func PromptStyleWithScanner(data *fgb.Fgb, scanner *bufio.Scanner, out io.Writer) (string, map[maplibre.StyleGroup]maplibre.Paint, error) {
+	if data != nil && data.Header != nil && len(data.Features) == 0 {
+		return "", nil, nil
+	}
 	fields, err := maplibre.DiscoverCategoryFields(data)
 	if err != nil {
 		return "", nil, err
