@@ -41,10 +41,10 @@
         ]
       ],
       "paint": {
-        "circle-color": "#000000",
-        "circle-radius": 4,
-        "circle-stroke-color": "#ffffff",
-        "circle-stroke-width": 2
+        "circle-color": "#ffffff",
+        "circle-radius": 6,
+        "circle-stroke-color": "#000000",
+        "circle-stroke-width": 4
       }
     },
     {
@@ -70,9 +70,9 @@
         ]
       ],
       "paint": {
-        "circle-color": "#ffffff",
+        "circle-color": "#000000",
         "circle-radius": 6,
-        "circle-stroke-color": "#000000",
+        "circle-stroke-color": "#ffffff",
         "circle-stroke-width": 4
       }
     }
