@@ -7,23 +7,22 @@ import HeaderTree from './HeaderTree';
 import { createInspection } from './inspection';
 import { decodeFgb, getBounds, getSourceName, readDataset } from './dataset';
 import type { Dataset, DatasetHeader } from './dataset';
+import sampleUrl from '../../test_data/sample-obstacles.fgb?url';
 import sampleStyleJson from '../../test_data/sample-obstacles.maplibre.json';
+import stationUrl from '../../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb?url';
 import stationStyleJson from '../../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.gen.maplibre.json';
 
-// Use the original filename, not Vite's hashed asset URL, for source naming.
-const sourceUrls = import.meta.glob<string>(
-  ['../../test_data/sample-obstacles.fgb', '../../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb'],
-  { eager: true, query: '?url', import: 'default' },
-);
 const sampleStyle = sampleStyleJson as unknown as StyleSpecification;
+// Use the original filename, not Vite's hashed asset URL, for source naming.
 const bundledSources = [
-  { id: 'obstacles', label: 'Sample obstacles', filename: 'sample-obstacles.fgb', style: sampleStyle },
+  { id: 'obstacles', label: 'Sample obstacles', filename: 'sample-obstacles.fgb', url: sampleUrl, style: sampleStyle },
   {
     id: 'stations', label: 'Brannstasjoner',
     filename: 'Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb',
+    url: stationUrl,
     style: stationStyleJson as unknown as StyleSpecification,
   },
-].map(source => ({ ...source, url: sourceUrls[`../../test_data/${source.filename}`] }));
+];
 type BundledSource = (typeof bundledSources)[number];
 const inspectors = [
   { key: 'header', label: 'Header', title: 'Parsed header and features' },
@@ -45,7 +44,7 @@ export default function App() {
   const sourcePanel = useRef<HTMLDivElement>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [requestedSource, setRequestedSource] = useState(bundledSources[0]);
-  const [loadingSource, setLoadingSource] = useState<BundledSource | null>(null);
+  const [loading, setLoading] = useState(false);
   const [sourceError, setSourceError] = useState<string | null>(null);
   const [dataset, setDataset] = useState<(Dataset & { autoCenter?: boolean; builtInId?: string }) | null>(null);
   const [partialHeader, setPartialHeader] = useState<DatasetHeader | null>(null);
@@ -75,7 +74,7 @@ export default function App() {
     const controller = new AbortController();
     sourceRequest.current = controller;
     setRequestedSource(source);
-    setLoadingSource(source);
+    setLoading(true);
     setSourceError(null);
     setPartialHeader(null);
     try {
@@ -93,7 +92,7 @@ export default function App() {
       }
     } finally {
       if (!controller.signal.aborted) {
-        setLoadingSource(null);
+        setLoading(false);
         sourceRequest.current = null;
       }
     }
@@ -117,7 +116,7 @@ export default function App() {
       if (request !== uploadRequest.current) return;
       sourceRequest.current?.abort();
       sourceRequest.current = null;
-      setLoadingSource(null);
+      setLoading(false);
       setSourceError(null);
       setPartialHeader(null);
       setDataset({ ...next, autoCenter: true });
@@ -241,30 +240,32 @@ export default function App() {
           sourceButton.current?.focus();
         }
       }}>
-        <div className="inspector-controls">
-          <button ref={uploadButton} type="button" className="inspector-toggle" disabled={uploading}
-            aria-expanded={uploadOpen} aria-controls="upload-panel" onClick={() => {
-              setFiles({});
-              setUploadError(null);
-              togglePanel('upload');
-            }}>
-            Upload files
-          </button>
-          <button ref={sourceButton} type="button" className="inspector-toggle" disabled={uploading}
-            aria-expanded={sourceOpen} aria-controls="source-panel" onClick={() => togglePanel('source')}>
-            Select source
-          </button>
+        <div className="map-toolbar">
+          <div className="inspector-controls">
+            <button ref={uploadButton} type="button" className="inspector-toggle" disabled={uploading}
+              aria-expanded={uploadOpen} aria-controls="upload-panel" onClick={() => {
+                setFiles({});
+                setUploadError(null);
+                togglePanel('upload');
+              }}>
+              Upload files
+            </button>
+            <button ref={sourceButton} type="button" className="inspector-toggle" disabled={uploading}
+              aria-expanded={sourceOpen} aria-controls="source-panel" onClick={() => togglePanel('source')}>
+              Select source
+            </button>
+            {inspectors.map(view => (
+              <button key={view.key} type="button" className="inspector-toggle" disabled={!views[view.key]}
+                aria-expanded={inspecting === view} aria-controls="inspector-panel"
+                onClick={() => togglePanel(view.key)}>
+                {inspecting === view ? 'Hide' : 'Inspect'} {view.label}
+              </button>
+            ))}
+          </div>
           <button type="button" className="inspector-toggle" disabled={!bounds || !mapReady}
             onClick={() => centerMap(window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 500)}>
             Center on bbox
           </button>
-          {inspectors.map(view => (
-            <button key={view.key} type="button" className="inspector-toggle" disabled={!views[view.key]}
-              aria-expanded={inspecting === view} aria-controls="inspector-panel"
-              onClick={() => togglePanel(view.key)}>
-              {inspecting === view ? 'Hide' : 'Inspect'} {view.label}
-            </button>
-          ))}
         </div>
         {sourceOpen && (
           <div ref={sourcePanel} id="source-panel" className="source-panel" role="group" aria-label="Select source">
@@ -299,9 +300,9 @@ export default function App() {
             {uploadError && <p role="alert">{uploadError}</p>}
           </form>
         )}
-        {(!dataset || !mapReady || error || sourceError || loadingSource) && (
+        {(!dataset || !mapReady || error || sourceError || loading) && (
           <div className="map-status" role={error || sourceError ? 'alert' : 'status'}>
-            {error ?? sourceError ?? (loadingSource ? `Loading ${loadingSource.label}…` : `Loading map and ${filename}…`)}
+            {error ?? sourceError ?? (loading ? `Loading ${requestedSource.label}…` : `Loading map and ${filename}…`)}
             {sourceError && (
               <button type="button" className="inspector-toggle source-retry" disabled={uploading}
                 onClick={() => {
