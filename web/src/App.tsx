@@ -3,10 +3,10 @@ import type { SubmitEvent } from 'react';
 import { Map, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl';
 import type { MapMouseEvent, StyleSpecification } from 'maplibre-gl';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import type { HeaderMeta } from 'flatgeobuf/lib/mjs/header-meta.js';
 import HeaderTree from './HeaderTree';
+import { createInspection } from './inspection';
 import { decodeFgb, getBounds, getSourceName, readDataset } from './dataset';
-import type { Dataset } from './dataset';
+import type { Dataset, DatasetHeader } from './dataset';
 import sampleStyleJson from '../../test_data/sample-obstacles.maplibre.json';
 
 // Use the original filename, not Vite's hashed asset URL, for source naming.
@@ -26,7 +26,7 @@ export default function App() {
   const uploadRequest = useRef(0);
   const uploadButton = useRef<HTMLButtonElement>(null);
   const [dataset, setDataset] = useState<(Dataset & { autoCenter?: boolean }) | null>(null);
-  const [partialHeader, setPartialHeader] = useState<HeaderMeta | null>(null);
+  const [partialHeader, setPartialHeader] = useState<DatasetHeader | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [inspecting, setInspecting] = useState<keyof typeof inspectors | null>(null);
@@ -35,7 +35,8 @@ export default function App() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [files, setFiles] = useState<Partial<Record<keyof typeof fileFields, File>>>({});
   const filename = dataset?.filename ?? samplePath.slice(samplePath.lastIndexOf('/') + 1);
-  const views = { header: dataset ? dataset.header : partialHeader, geojson: dataset?.data, style: dataset?.style ?? sampleStyle };
+  const inspection = useMemo(() => createInspection(dataset ? dataset.header : partialHeader, dataset?.data), [dataset, partialHeader]);
+  const views = { header: inspection, geojson: dataset?.data, style: dataset?.style ?? sampleStyle };
   const bounds = useMemo(() => dataset && getBounds(dataset.data), [dataset]);
 
   function centerMap(duration = 0) {
@@ -221,10 +222,10 @@ export default function App() {
         )}
         {inspecting && views[inspecting] && (
           <section key={inspecting} id="inspector-panel" className="inspector-panel" tabIndex={0}
-            aria-label={inspecting === 'header' ? 'Parsed header content' : inspecting === 'geojson' ? 'Decoded GeoJSON' : 'Map style JSON source'}>
+            aria-label={inspecting === 'header' ? 'Parsed header and features' : inspecting === 'geojson' ? 'Decoded GeoJSON' : 'Map style JSON source'}>
             {inspecting === 'header' ? (
               <>
-                <h2 className="header-panel-title">Parsed header content</h2>
+                <h2 className="header-panel-title">Parsed header and features</h2>
                 <div className="header-tree"><HeaderTree value={views.header} /></div>
               </>
             ) : <pre className="inspector-json">{JSON.stringify(views[inspecting], null, 2)}</pre>}
