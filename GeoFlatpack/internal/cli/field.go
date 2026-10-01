@@ -18,7 +18,7 @@ func NewScanner(in io.Reader) *bufio.Scanner {
 }
 
 // PromptStyleWithScanner retains buffered answers between input layers.
-func PromptStyleWithScanner(data *fgb.Fgb, scanner *bufio.Scanner, out io.Writer) (string, map[maplibre.StyleGroup]maplibre.Paint, error) {
+func PromptStyleWithScanner(data *fgb.Fgb, scanner *bufio.Scanner, out io.Writer) (string, map[maplibre.StyleGroup][]maplibre.RenderLayerStyle, error) {
 	if data != nil && data.Header != nil && len(data.Features) == 0 {
 		return "", nil, nil
 	}
@@ -38,9 +38,9 @@ func PromptStyleWithScanner(data *fgb.Fgb, scanner *bufio.Scanner, out io.Writer
 		return "", nil, err
 	}
 
-	paints, err := PromptPaints(groups, scanner, out)
+	styles, err := PromptStyles(groups, scanner, out)
 
-	return field, paints, err
+	return field, styles, err
 }
 
 func PromptCategoryField(fields []maplibre.CategoryField, scanner *bufio.Scanner, out io.Writer) (string, error) {

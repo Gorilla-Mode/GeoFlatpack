@@ -108,11 +108,11 @@ func run(opts options, in io.Reader, out io.Writer) (err error) {
 			if _, err := fmt.Fprintf(out, "\nLayer %q (%s)\n", names[i], filepath.Base(paths[i])); err != nil {
 				return fmt.Errorf("layer %q: %w", names[i], err)
 			}
-			field, paints, err := cli.PromptStyleWithScanner(data, scanner, out)
+			field, styles, err := cli.PromptStyleWithScanner(data, scanner, out)
 			if err != nil {
 				return fmt.Errorf("layer %q: %w", names[i], err)
 			}
-			inputs[i].CategoryField, inputs[i].Paints = field, paints
+			inputs[i].CategoryField, inputs[i].Styles = field, styles
 		}
 		mapStyle, err := maplibre.BuildMapLibreCollectionStyle(filepath.Base(output), inputs)
 		if err != nil {
