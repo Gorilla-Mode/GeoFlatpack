@@ -17,8 +17,14 @@ import (
 )
 
 type options struct {
-	input, output, format                                      string
-	verbose, writeFGB, writeStyle, skipFailures, forceEPSG4326 bool
+	input         string
+	output        string
+	format        string
+	verbose       bool
+	writeFGB      bool
+	writeStyle    bool
+	skipFailures  bool
+	forceEPSG4326 bool
 }
 
 func main() {
@@ -31,15 +37,18 @@ func main() {
 	flag.BoolVar(&opts.writeStyle, "write-style", true, "Prompt for each layer and write one shared .gen.maplibre.json stylesheet")
 	flag.BoolVar(&opts.skipFailures, "skip-failures", false, "Skip feature conversion failures; skipped failures can produce incomplete output")
 	flag.BoolVar(&opts.forceEPSG4326, "force-epsg:4326", true, "Reproject coordinates and CRS metadata to EPSG:4326 regardless of stylesheet output; use --force-epsg:4326=false to preserve the original CRS. Regenerate existing projected FGB files for the web app")
+
 	flag.Usage = func() {
 		_, _ = fmt.Fprintln(os.Stderr, "Usage gfp -i <input file> -f <stylesheet format> -o <output base or directory>")
 		flag.PrintDefaults()
 	}
+
 	flag.Parse()
 	if opts.input == "" || flag.NArg() != 0 {
 		flag.Usage()
 		os.Exit(2)
 	}
+
 	if err := run(opts, os.Stdin, os.Stderr); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, "gfp:", err)
 		os.Exit(1)
@@ -54,13 +63,15 @@ func run(opts options, in io.Reader, out io.Writer) (err error) {
 	if err := validate.Format(validate.StyleFormat(opts.format)); err != nil {
 		return err
 	}
+
 	output, err := resolveOutput(opts.input, opts.output)
 	if err != nil {
 		return err
 	}
 	if opts.verbose {
-		fmt.Fprintln(out, "gfp: converting every GML layer to FlatGeobuf...")
+		_, _ = fmt.Fprintln(out, "gfp: converting every GML layer to FlatGeobuf...")
 	}
+
 	files, err := convert.GmlToFgb(opts.input, opts.forceEPSG4326, opts.skipFailures)
 	if err != nil {
 		return err
@@ -80,9 +91,10 @@ func run(opts options, in io.Reader, out io.Writer) (err error) {
 	for i, file := range files {
 		names[i] = file.LayerName
 		if opts.verbose {
-			fmt.Fprintf(out, "gfp: layer %q loaded into memory\n%s\n", file.LayerName, fgb.InspectFgb(layers[i]))
+			_, _ = fmt.Fprintf(out, "gfp: layer %q loaded into memory\n%s\n", file.LayerName, fgb.InspectFgb(layers[i]))
 		}
 	}
+
 	paths := layerOutputPaths(output, names)
 	var styleJSON []byte
 	if opts.writeStyle {
@@ -111,28 +123,31 @@ func run(opts options, in io.Reader, out io.Writer) (err error) {
 			return fmt.Errorf("marshal MapLibre style: %w", err)
 		}
 	}
+
 	if opts.writeFGB || opts.writeStyle {
 		if err := os.MkdirAll(filepath.Dir(output), 0o755); err != nil {
 			return err
 		}
 	}
+
 	if opts.writeFGB {
 		for i, file := range files {
 			if err := convert.WriteFgb(file, paths[i]); err != nil {
 				return fmt.Errorf("write layer %q: %w", file.LayerName, err)
 			}
 			if opts.verbose {
-				fmt.Fprintln(out, "gfp: FlatGeobuf written to", paths[i])
+				_, _ = fmt.Fprintln(out, "gfp: FlatGeobuf written to", paths[i])
 			}
 		}
 	}
+
 	if opts.writeStyle {
 		styleOutput := strings.TrimSuffix(output, filepath.Ext(output)) + ".gen.maplibre.json"
 		if err := os.WriteFile(styleOutput, styleJSON, 0o644); err != nil {
 			return fmt.Errorf("write MapLibre style: %w", err)
 		}
 		if opts.verbose {
-			fmt.Fprintln(out, "gfp: MapLibre style written to", styleOutput)
+			_, _ = fmt.Fprintln(out, "gfp: MapLibre style written to", styleOutput)
 		}
 	}
 	return nil
@@ -160,12 +175,14 @@ func resolveOutput(input, output string) (string, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return "", err
 	}
+
 	if output == "." || strings.HasSuffix(output, string(os.PathSeparator)) || (err == nil && info.IsDir()) {
 		name := strings.TrimSuffix(filepath.Base(input), filepath.Ext(input))
 		output = filepath.Join(output, name+".fgb")
 	} else if filepath.Ext(output) == "" {
 		output += ".fgb"
 	}
+
 	return output, nil
 }
 
@@ -173,9 +190,11 @@ func layerOutputPaths(output string, names []string) []string {
 	if len(names) == 1 {
 		return []string{output}
 	}
+
 	base := strings.TrimSuffix(output, filepath.Ext(output))
 	paths := make([]string, len(names))
 	used := make(map[string]bool)
+
 	for i, name := range names {
 		// A conservative portable filename alphabet also prevents path traversal.
 		name = strings.Map(func(r rune) rune {
@@ -194,5 +213,6 @@ func layerOutputPaths(output string, names []string) []string {
 		used[strings.ToLower(unique)] = true
 		paths[i] = base + "." + unique + ".fgb"
 	}
+
 	return paths
 }
