@@ -117,7 +117,49 @@ body {
 .source-panel {
   display: grid;
   gap: 8px;
+  width: min(560px, 100%);
   font-size: 14px;
+}
+
+.source-panel p,
+.map-status p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.source-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.source-visibility {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.source-style {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.source-style select {
+  width: 100%;
+  min-width: 0;
+  padding: 6px;
+  font: inherit;
+}
+
+.source-row p {
+  grid-column: 1 / -1;
 }
 
 .source-panel .inspector-toggle {
@@ -127,11 +169,11 @@ body {
 }
 
 .source-panel .inspector-toggle:hover,
-.source-panel .inspector-toggle[aria-pressed='true'] {
+.source-row[data-selected='true'] .inspector-toggle {
   background: #eff6ff;
 }
 
-.source-panel .inspector-toggle[aria-pressed='true'] {
+.source-row[data-selected='true'] .inspector-toggle {
   color: #1d4ed8;
 }
 
@@ -144,6 +186,11 @@ body {
 .inspector-json {
   margin: 0;
   font: inherit;
+}
+
+.inspector-source {
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
 }
 
 .upload-panel p {
@@ -170,7 +217,8 @@ body {
   font: inherit;
 }
 
-.upload-panel [role='alert'] {
+.upload-panel [role='alert'],
+.source-panel [role='alert'] {
   margin: 12px 0 0;
   color: #b91c1c;
   overflow-wrap: anywhere;

@@ -14,7 +14,6 @@ export function getSourceName(filename: string): string {
 
 export type Dataset = {
   filename: string;
-  style: StyleSpecification;
   data: FeatureCollection;
   header: DatasetHeader | null;
 };
@@ -41,8 +40,7 @@ export function getBounds(data: FeatureCollection): [[number, number], [number, 
   return Number.isFinite(west) ? [[west, south], [east, north]] : null;
 }
 
-export async function readDataset(fgbFile: File, styleFile: File): Promise<Dataset> {
-  if (!/\.fgb$/i.test(fgbFile.name)) throw new Error('Choose a .fgb data file.');
+export async function readStylesheet(styleFile: File): Promise<StyleSpecification> {
   if (!/\.json$/i.test(styleFile.name)) throw new Error('Choose a MapLibre .json stylesheet.');
 
   let style: StyleSpecification;
@@ -54,16 +52,29 @@ export async function readDataset(fgbFile: File, styleFile: File): Promise<Datas
   if (!style || typeof style !== 'object') throw new Error('Choose a MapLibre style object.');
   const errors = validateStyleMin(style);
   if (errors.length) throw new Error(`Invalid MapLibre style: ${errors[0].message}`);
+  return style;
+}
 
-  const source = getSourceName(fgbFile.name);
+export function getStyleMismatch(filename: string, style: StyleSpecification): string | null {
+  const source = getSourceName(filename);
   if (!Object.hasOwn(style.sources, source) || style.sources[source].type !== 'geojson') {
-    throw new Error(`The stylesheet must define a GeoJSON source named "${source}" to match the FGB filename.`);
+    return `The stylesheet must define a GeoJSON source named "${source}" to match the FGB filename.`;
   }
   if (!style.layers.some(layer => 'source' in layer && layer.source === source)) {
-    throw new Error(`The stylesheet must contain at least one layer using source "${source}".`);
+    return `The stylesheet must contain at least one layer using source "${source}".`;
   }
+  return null;
+}
 
-  return { filename: fgbFile.name, style, ...await decodeFgb(await fgbFile.arrayBuffer()) };
+export async function readDataset(fgbFile: File, style: StyleSpecification): Promise<Dataset> {
+  try {
+    if (!/\.fgb$/i.test(fgbFile.name)) throw new Error('Choose a .fgb data file.');
+    const mismatch = getStyleMismatch(fgbFile.name, style);
+    if (mismatch) throw new Error(mismatch);
+    return { filename: fgbFile.name, ...await decodeFgb(await fgbFile.arrayBuffer()) };
+  } catch (cause) {
+    throw new Error(`${fgbFile.name}: ${cause instanceof Error ? cause.message : cause}`);
+  }
 }
 
 export async function decodeFgb(buffer: ArrayBuffer, signal?: AbortSignal, onHeader?: (header: DatasetHeader) => void) {
