@@ -105,20 +105,23 @@ body {
   font: 13px/1.5 ui-monospace, monospace;
 }
 
-.inspector-panel {
+.inspector-panel,
+.source-panel {
   width: min(560px, 100%);
+}
+
+.upload-panel,
+.source-panel {
+  font-size: 14px;
 }
 
 .upload-panel {
   width: min(440px, 100%);
-  font-size: 14px;
 }
 
 .source-panel {
   display: grid;
   gap: 8px;
-  width: min(560px, 100%);
-  font-size: 14px;
 }
 
 .source-panel p,
@@ -151,11 +154,15 @@ body {
   min-width: 0;
 }
 
-.source-style select {
+.source-style select,
+.upload-panel input {
   width: 100%;
   min-width: 0;
-  padding: 6px;
   font: inherit;
+}
+
+.source-style select {
+  padding: 6px;
 }
 
 .source-row p {
@@ -209,12 +216,6 @@ body {
 .upload-panel label {
   display: grid;
   gap: 6px;
-}
-
-.upload-panel input {
-  width: 100%;
-  min-width: 0;
-  font: inherit;
 }
 
 .upload-panel [role='alert'],

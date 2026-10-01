@@ -18,6 +18,24 @@ export type Dataset = {
   header: DatasetHeader | null;
 };
 
+export type Stylesheet = { id: string; label: string; style: StyleSpecification };
+export type SourceLayer = {
+  id: string;
+  label: string;
+  filename: string;
+  styleId: string;
+  visible: boolean;
+  url?: string;
+  dataset?: Dataset;
+  partialHeader?: DatasetHeader;
+  loading?: boolean;
+  error?: string;
+};
+
+export function getErrorMessage(cause: unknown, fallback?: string): string {
+  return cause instanceof Error ? cause.message : fallback ?? String(cause);
+}
+
 export function getBounds(data: FeatureCollection): [[number, number], [number, number]] | null {
   let west = Infinity, south = Infinity, east = -Infinity, north = -Infinity;
   function visit(coordinates: unknown): void {
@@ -73,7 +91,7 @@ export async function readDataset(fgbFile: File, style: StyleSpecification): Pro
     if (mismatch) throw new Error(mismatch);
     return { filename: fgbFile.name, ...await decodeFgb(await fgbFile.arrayBuffer()) };
   } catch (cause) {
-    throw new Error(`${fgbFile.name}: ${cause instanceof Error ? cause.message : cause}`);
+    throw new Error(`${fgbFile.name}: ${getErrorMessage(cause)}`);
   }
 }
 

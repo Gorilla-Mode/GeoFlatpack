@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SubmitEvent } from 'react';
-import { Map, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl';
-import type { MapMouseEvent, StyleSpecification } from 'maplibre-gl';
+import { Map, NavigationControl, setWorkerUrl } from 'maplibre-gl';
+import type { StyleSpecification } from 'maplibre-gl';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import HeaderTree from './HeaderTree';
 import { createInspection } from './inspection';
-import { decodeFgb, getBounds, getSourceName, getStyleMismatch, readDataset, readStylesheet } from './dataset';
-import type { Dataset, DatasetHeader } from './dataset';
+import { decodeFgb, getBounds, getErrorMessage, getStyleMismatch, readDataset, readStylesheet } from './dataset';
+import type { Dataset, SourceLayer, Stylesheet } from './dataset';
+import { renderMapLayers } from './mapLayers';
 import sampleUrl from '../../test_data/sample-obstacles.fgb?url';
 import sampleStyleJson from '../../test_data/sample-obstacles.maplibre.json';
 import stationUrl from '../../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb?url';
@@ -15,19 +16,6 @@ import skytefeltAreaUrl from '../../test_data/Forurensning_0000_Norge_3035_Skyte
 import skytefeltBoundaryUrl from '../../test_data/Forurensning_0000_Norge_3035_Skytefelt_GML.Skytefeltgrense.fgb?url';
 import skytefeltStyleJson from '../../test_data/Forurensning_0000_Norge_3035_Skytefelt_GML.gen.maplibre.json';
 
-type Stylesheet = { id: string; label: string; style: StyleSpecification };
-type SourceLayer = {
-  id: string;
-  label: string;
-  filename: string;
-  styleId: string;
-  visible: boolean;
-  url?: string;
-  dataset?: Dataset;
-  partialHeader?: DatasetHeader;
-  loading?: boolean;
-  error?: string;
-};
 const sampleStyle = sampleStyleJson as unknown as StyleSpecification;
 const bundledStyles: Stylesheet[] = [
   { id: 'obstacles', label: 'Sample obstacles', style: sampleStyle },
@@ -59,9 +47,30 @@ const inspectors = [
   { key: 'style', label: 'Map Style', title: 'Map style JSON source' },
 ] as const;
 type ActivePanel = 'upload' | 'source' | (typeof inspectors)[number]['key'] | null;
+const fitOptions = { padding: 48, maxZoom: 18, duration: 0, bearing: 0, pitch: 0 };
 
 function layerBounds(layers: SourceLayer[]) {
   return getBounds({ type: 'FeatureCollection', features: layers.flatMap(layer => layer.dataset?.data.features ?? []) });
+}
+
+function LayerStatus({ layer, displayError, onRetry, compact = false }: {
+  layer: SourceLayer;
+  displayError?: string;
+  onRetry: () => void;
+  compact?: boolean;
+}) {
+  const error = layer.error || displayError;
+  return (
+    <>
+      {layer.loading && !(compact && error) && <p role="status">Loading {layer.label}…</p>}
+      {error && <p role="alert">{error}</p>}
+      {layer.error && (
+        <button type="button" className={`inspector-toggle${compact ? ' source-retry' : ''}`} onClick={onRetry}>
+          Retry {layer.label}
+        </button>
+      )}
+    </>
+  );
 }
 
 setWorkerUrl(mapWorkerUrl);
@@ -95,7 +104,7 @@ export default function App() {
   const inspecting = inspectors.find(view => view.key === activePanel);
   const inspection = useMemo(() => createInspection(selected.dataset?.header ?? selected.partialHeader ?? null, selected.dataset?.data), [selected]);
   const views = { header: inspection, geojson: selected.dataset?.data, style: selectedStyle.style };
-  const visibleLayers = useMemo(() => layers.filter(layer => layer.visible && layer.dataset), [layers]);
+  const visibleLayers = useMemo(() => layers.filter((layer): layer is SourceLayer & { dataset: Dataset } => layer.visible && !!layer.dataset), [layers]);
   const bounds = useMemo(() => layerBounds(visibleLayers), [visibleLayers]);
   const pendingLayers = layers.filter(layer => layer.loading || layer.error || displayErrors[layer.id]);
 
@@ -108,7 +117,7 @@ export default function App() {
   }
 
   function centerMap(duration = 0) {
-    if (bounds) mapRef.current?.fitBounds(bounds, { padding: 48, maxZoom: 18, duration, bearing: 0, pitch: 0 });
+    if (bounds) mapRef.current?.fitBounds(bounds, { ...fitOptions, duration });
   }
 
   async function loadSource(source: SourceLayer, autoCenter = true) {
@@ -128,7 +137,7 @@ export default function App() {
       updateLayer(source.id, { dataset: { filename: source.filename, ...decoded }, loading: false });
     } catch (cause) {
       if (!controller.signal.aborted) {
-        updateLayer(source.id, { loading: false, error: `Unable to load ${source.label}: ${cause instanceof Error ? cause.message : cause}` });
+        updateLayer(source.id, { loading: false, error: `Unable to load ${source.label}: ${getErrorMessage(cause)}` });
       }
     } finally {
       if (sourceRequests.current[source.id] === controller) delete sourceRequests.current[source.id];
@@ -182,7 +191,7 @@ export default function App() {
       setSelectedId(added[0].id);
       setActivePanel('source');
     } catch (cause) {
-      if (request === uploadRequest.current) setUploadError(cause instanceof Error ? cause.message : 'Unable to load these files.');
+      if (request === uploadRequest.current) setUploadError(getErrorMessage(cause, 'Unable to load these files.'));
     } finally {
       if (request === uploadRequest.current) setUploading(false);
     }
@@ -229,92 +238,15 @@ export default function App() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    const layerIds: string[] = [];
-    const sourceIds: string[] = [];
-    const owners: Record<string, { layer: SourceLayer; featureId: (index: number) => unknown }> = {};
-    const failures: Record<string, string> = {};
-    const rendered: SourceLayer[] = [];
-    const popup = new Popup({ className: 'obstacle-popup', closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 48px))' });
-    const canvas = map.getCanvas();
-
-    function findFeature({ point: { x, y } }: MapMouseEvent) {
-      if (!layerIds.length) return;
-      const hit = map!.queryRenderedFeatures([[x - 4, y - 4], [x + 4, y + 4]], { layers: layerIds })[0];
-      if (!hit) return;
-      const owner = owners[hit.source];
-      const feature = owner?.layer.dataset?.data.features.find((_, index) => owner.featureId(index) === hit.id);
-      return feature ? { feature, layer: owner.layer } : undefined;
-    }
-    function showFeature(event: MapMouseEvent) {
-      popup.remove();
-      const found = findFeature(event);
-      if (!found) return;
-      const content = document.createElement('div');
-      const title = Object.assign(document.createElement('h2'), { className: 'obstacle-popup-title', textContent: found.layer.label });
-      const properties = Object.assign(document.createElement('pre'), {
-        className: 'obstacle-properties', tabIndex: 0, textContent: JSON.stringify(found.feature.properties, null, 2),
-      });
-      properties.setAttribute('aria-label', 'Feature properties');
-      content.append(title, properties);
-      popup.setLngLat(event.lngLat).setDOMContent(content).addTo(map!);
-    }
-    function updateCursor(event: MapMouseEvent) { canvas.style.cursor = findFeature(event) ? 'pointer' : ''; }
-    function resetCursor() { canvas.style.cursor = ''; }
-
-    for (const layer of visibleLayers) {
-      const sourceId = `geoflatpack-${layer.id}`;
-      const addedLayers: string[] = [];
-      let sourceAdded = false;
-      try {
-        const style = styles.find(style => style.id === layer.styleId)!.style;
-        const originalSource = getSourceName(layer.filename);
-        const source = style.sources[originalSource];
-        if (source.type !== 'geojson') throw new Error('The assigned stylesheet must use a GeoJSON source.');
-        const data = layer.dataset!.data;
-        map.addSource(sourceId, { ...source, data });
-        sourceAdded = true;
-        for (const styleLayer of style.layers) {
-          if (!('source' in styleLayer) || styleLayer.source !== originalSource) continue;
-          const id = `${sourceId}-${styleLayer.id}`;
-          map.addLayer({ ...styleLayer, id, source: sourceId });
-          if (!map.getLayer(id)) throw new Error(`Unable to add style layer "${styleLayer.id}".`);
-          addedLayers.push(id);
-        }
-        owners[sourceId] = {
-          layer,
-          featureId: index => {
-            const feature = data.features[index];
-            if (typeof source.promoteId === 'string') return feature.properties?.[source.promoteId];
-            return source.generateId ? index : feature.id;
-          },
-        };
-        sourceIds.push(sourceId);
-        layerIds.push(...addedLayers);
-        rendered.push(layer);
-      } catch (cause) {
-        for (const id of addedLayers.reverse()) if (map.getLayer(id)) map.removeLayer(id);
-        if (sourceAdded && map.getSource(sourceId)) map.removeSource(sourceId);
-        failures[layer.id] = `Unable to display ${layer.label}: ${cause instanceof Error ? cause.message : cause}`;
-      }
-    }
-    setDisplayErrors(failures);
-    const newlyVisible = rendered.filter(layer => pendingCenters.current.has(layer.id));
+    const { cleanup, errors, renderedLayerIds } = renderMapLayers(map, visibleLayers.map(layer => ({
+      layer, style: styles.find(style => style.id === layer.styleId)!.style,
+    })));
+    setDisplayErrors(errors);
+    const newlyVisible = visibleLayers.filter(layer => renderedLayerIds.has(layer.id) && pendingCenters.current.has(layer.id));
     const nextBounds = layerBounds(newlyVisible);
     newlyVisible.forEach(layer => pendingCenters.current.delete(layer.id));
-    if (nextBounds) map.fitBounds(nextBounds, { padding: 48, maxZoom: 18, duration: 0, bearing: 0, pitch: 0 });
-    map.on('click', showFeature);
-    map.on('mousemove', updateCursor);
-    canvas.addEventListener('mouseleave', resetCursor);
-    return () => {
-      popup.remove();
-      map.off('click', showFeature);
-      map.off('mousemove', updateCursor);
-      canvas.removeEventListener('mouseleave', resetCursor);
-      resetCursor();
-      if (mapRef.current !== map) return;
-      for (const id of layerIds.reverse()) if (map.getLayer(id)) map.removeLayer(id);
-      for (const id of sourceIds) if (map.getSource(id)) map.removeSource(id);
-    };
+    if (nextBounds) map.fitBounds(nextBounds, fitOptions);
+    return () => cleanup(mapRef.current === map);
   }, [visibleLayers, styles, mapReady]);
 
   return (
@@ -379,9 +311,7 @@ export default function App() {
                   }}>
                   Inspect{selectedId === layer.id ? ' (current)' : ''}
                 </button>
-                {layer.loading && <p role="status">Loading {layer.label}…</p>}
-                {(layer.error || displayErrors[layer.id]) && <p role="alert">{layer.error || displayErrors[layer.id]}</p>}
-                {layer.error && <button type="button" className="inspector-toggle" onClick={() => void loadSource(layer)}>Retry {layer.label}</button>}
+                <LayerStatus layer={layer} displayError={displayErrors[layer.id]} onRetry={() => void loadSource(layer)} />
               </div>
             ))}
           </div>
@@ -418,10 +348,7 @@ export default function App() {
           <div className="map-status">
             {pendingLayers.map(layer => (
               <div key={layer.id}>
-                <p role={layer.error || displayErrors[layer.id] ? 'alert' : 'status'}>
-                  {layer.error || displayErrors[layer.id] || `Loading ${layer.label}…`}
-                </p>
-                {layer.error && <button type="button" className="inspector-toggle source-retry" onClick={() => void loadSource(layer)}>Retry {layer.label}</button>}
+                <LayerStatus layer={layer} displayError={displayErrors[layer.id]} onRetry={() => void loadSource(layer)} compact />
               </div>
             ))}
           </div>
