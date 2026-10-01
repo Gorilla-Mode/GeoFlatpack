@@ -46,19 +46,6 @@ type LayerStyle struct {
 	Paints        map[StyleGroup]Paint
 }
 
-func BuildMapLibreStyle(
-	data *fgb.Fgb,
-	filename, sourceName, field string,
-	paints map[StyleGroup]Paint,
-) (*StyleHeader, error) {
-	if sourceName == "" {
-		sourceName = styleName(filename)
-	}
-	return BuildMapLibreCollectionStyle(filename, []LayerStyle{{
-		Data: data, SourceID: sourceName, CategoryField: field, Paints: paints,
-	}})
-}
-
 // BuildMapLibreCollectionStyle draws polygons, lines, then points, retaining
 // input order within each geometry type. Empty inputs still contribute sources.
 func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle) (*StyleHeader, error) {
@@ -99,7 +86,7 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle) (*StyleH
 				id := fmt.Sprintf("%s-%s-%d", input.SourceID, geometry, j)
 				paint := input.Paints[group]
 				var layer StyleLayer
-				
+
 				switch geometry {
 				case Point:
 					layer = PointLayer(id, input.SourceID, input.CategoryField, group, paint)

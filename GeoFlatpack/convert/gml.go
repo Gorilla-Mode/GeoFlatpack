@@ -142,7 +142,7 @@ func convertLayer(src *godal.Dataset, name, path string, forceEPSG4326, skipFail
 	if err != nil {
 		return nil, fmt.Errorf("reopen FGB: %w", err)
 	}
-	
+
 	keep = true
 	return &MemoryFGB{LayerName: name, Dataset: dataset, path: path}, nil
 }

@@ -10,12 +10,6 @@ import (
 	"strings"
 )
 
-// PromptStyle shares a scanner across field selection and all paint prompts so
-// buffered answers from a pipe are retained.
-func PromptStyle(data *fgb.Fgb, in io.Reader, out io.Writer) (string, map[maplibre.StyleGroup]maplibre.Paint, error) {
-	return PromptStyleWithScanner(data, NewScanner(in), out)
-}
-
 // NewScanner creates the shared scanner for an entire styling session.
 func NewScanner(in io.Reader) *bufio.Scanner {
 	scanner := bufio.NewScanner(in)
