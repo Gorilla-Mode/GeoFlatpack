@@ -32,6 +32,15 @@
       }
     },
     {
+      "id": "buildings-circle",
+      "type": "circle",
+      "source": "sample-obstacles",
+      "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "kind"], "building"]],
+      "paint": {
+        "circle-color": "#2563eb"
+      }
+    },
+    {
       "id": "buildings-line",
       "type": "line",
       "source": "sample-obstacles",
