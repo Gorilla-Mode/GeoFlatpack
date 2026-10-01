@@ -42,6 +42,15 @@ jobs:
         working-directory: web
         run: npm run build
 
+      - name: Copy generated Skytefelt files
+        run: |
+          mkdir -p web/dist/test_data
+          cp \
+            test_data/Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt.fgb \
+            test_data/Forurensning_0000_Norge_3035_Skytefelt_GML.Skytefeltgrense.fgb \
+            test_data/Forurensning_0000_Norge_3035_Skytefelt_GML.gen.maplibre.json \
+            web/dist/test_data/
+
       - name: Verify production assets
         shell: bash
         run: |

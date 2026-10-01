@@ -32,6 +32,26 @@
       }
     },
     {
+      "id": "buildings-circle",
+      "type": "circle",
+      "source": "sample-obstacles",
+      "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "kind"], "building"]],
+      "paint": {
+        "circle-color": "#2563eb"
+      }
+    },
+    {
+      "id": "buildings-line",
+      "type": "line",
+      "source": "sample-obstacles",
+      "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "kind"], "building"]],
+      "paint": {
+        "line-color": "#dc2626",
+        "line-width": 2,
+        "line-dasharray": [2, 2]
+      }
+    },
+    {
       "id": "power-lines",
       "type": "line",
       "source": "sample-obstacles",

@@ -1,169 +1,254 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SubmitEvent } from 'react';
-import { Map, NavigationControl, Popup, setWorkerUrl } from 'maplibre-gl';
-import type { MapMouseEvent, StyleSpecification } from 'maplibre-gl';
+import { Map, NavigationControl, setWorkerUrl } from 'maplibre-gl';
+import type { StyleSpecification } from 'maplibre-gl';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import HeaderTree from './HeaderTree';
+import LayerOrderControl from './LayerOrderControl';
+import type { LayerPlacement } from './LayerOrderControl';
 import { createInspection } from './inspection';
-import { decodeFgb, getBounds, getSourceName, readDataset } from './dataset';
-import type { Dataset, DatasetHeader } from './dataset';
+import { decodeFgb, getBounds, getErrorMessage, getStyleMismatch, readDataset, readStylesheet } from './dataset';
+import type { Dataset, SourceLayer, Stylesheet } from './dataset';
+import { renderMapLayers } from './mapLayers';
 import sampleUrl from '../../test_data/sample-obstacles.fgb?url';
 import sampleStyleJson from '../../test_data/sample-obstacles.maplibre.json';
 import stationUrl from '../../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb?url';
 import stationStyleJson from '../../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.gen.maplibre.json';
+import skytefeltAreaUrl from '../../test_data/Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt.fgb?url';
+import skytefeltBoundaryUrl from '../../test_data/Forurensning_0000_Norge_3035_Skytefelt_GML.Skytefeltgrense.fgb?url';
+import skytefeltStyleJson from '../../test_data/Forurensning_0000_Norge_3035_Skytefelt_GML.gen.maplibre.json';
 
 const sampleStyle = sampleStyleJson as unknown as StyleSpecification;
-// Use the original filename, not Vite's hashed asset URL, for source naming.
-const bundledSources = [
-  { id: 'obstacles', label: 'Sample obstacles', filename: 'sample-obstacles.fgb', url: sampleUrl, style: sampleStyle },
+const bundledStyles: Stylesheet[] = [
+  { id: 'obstacles', label: 'Sample obstacles', style: sampleStyle },
+  { id: 'stations', label: 'Brannstasjoner', style: stationStyleJson as unknown as StyleSpecification },
+  { id: 'skytefelt', label: 'Skytefelt (shared)', style: skytefeltStyleJson as unknown as StyleSpecification },
+];
+// Use the original filenames, not Vite's hashed asset URLs, for style matching.
+const bundledSources: SourceLayer[] = [
+  { id: 'obstacles', label: 'Sample obstacles', filename: 'sample-obstacles.fgb', url: sampleUrl, styleId: 'obstacles', visible: false },
   {
     id: 'stations', label: 'Brannstasjoner',
     filename: 'Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb',
-    url: stationUrl,
-    style: stationStyleJson as unknown as StyleSpecification,
+    url: stationUrl, styleId: 'stations', visible: false,
+  },
+  {
+    id: 'skytefelt-area', label: 'Skytefelt areas',
+    filename: 'Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt.fgb',
+    url: skytefeltAreaUrl, styleId: 'skytefelt', visible: true,
+  },
+  {
+    id: 'skytefelt-boundary', label: 'Skytefelt boundaries',
+    filename: 'Forurensning_0000_Norge_3035_Skytefelt_GML.Skytefeltgrense.fgb',
+    url: skytefeltBoundaryUrl, styleId: 'skytefelt', visible: false,
   },
 ];
-type BundledSource = (typeof bundledSources)[number];
+const initialSource = bundledSources.find(layer => layer.visible)!;
+const initialStyle = bundledStyles.find(style => style.id === initialSource.styleId)!.style;
 const inspectors = [
   { key: 'header', label: 'Header', title: 'Parsed header and features' },
   { key: 'geojson', label: 'GeoJSON', title: 'Decoded GeoJSON' },
   { key: 'style', label: 'Map Style', title: 'Map style JSON source' },
 ] as const;
 type ActivePanel = 'upload' | 'source' | (typeof inspectors)[number]['key'] | null;
-const fileFields = { fgb: ['FlatGeobuf file', '.fgb'], style: ['MapLibre stylesheet', '.json,application/json'] } as const;
+const fitOptions = { padding: 48, maxZoom: 18, duration: 0, bearing: 0, pitch: 0 };
+
+function layerBounds(layers: SourceLayer[]) {
+  return getBounds({ type: 'FeatureCollection', features: layers.flatMap(layer => layer.dataset?.data.features ?? []) });
+}
+
+function LayerStatus({ layer, displayError, onRetry, compact = false }: {
+  layer: SourceLayer;
+  displayError?: string;
+  onRetry: () => void;
+  compact?: boolean;
+}) {
+  const error = layer.error || displayError;
+  return (
+    <>
+      {layer.loading && !(compact && error) && <p role="status">Loading {layer.label}…</p>}
+      {error && <p role="alert">{error}</p>}
+      {layer.error && (
+        <button type="button" className={`inspector-toggle${compact ? ' source-retry' : ''}`} onClick={onRetry}>
+          Retry {layer.label}
+        </button>
+      )}
+    </>
+  );
+}
+
 setWorkerUrl(mapWorkerUrl);
 
 export default function App() {
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
-  const sourceRequest = useRef<AbortController | null>(null);
+  const sourceRequests = useRef<Record<string, AbortController>>({});
+  const pendingCenters = useRef(new Set<string>());
   const uploadRequest = useRef(0);
+  const nextBatch = useRef(0);
   const uploadButton = useRef<HTMLButtonElement>(null);
-  const restoreUploadFocus = useRef(false);
   const sourceButton = useRef<HTMLButtonElement>(null);
   const sourcePanel = useRef<HTMLDivElement>(null);
+  const inspectorPanel = useRef<HTMLElement>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
-  const [requestedSource, setRequestedSource] = useState(bundledSources[0]);
-  const [loading, setLoading] = useState(false);
-  const [sourceError, setSourceError] = useState<string | null>(null);
-  const [dataset, setDataset] = useState<(Dataset & { autoCenter?: boolean; builtInId?: string }) | null>(null);
-  const [partialHeader, setPartialHeader] = useState<DatasetHeader | null>(null);
+  const [library, setLibrary] = useState({ layers: bundledSources, styles: bundledStyles });
+  const [selectedId, setSelectedId] = useState(initialSource.id);
   const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [displayErrors, setDisplayErrors] = useState<Record<string, string>>({});
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [files, setFiles] = useState<Partial<Record<keyof typeof fileFields, File>>>({});
+  const [fgbFiles, setFgbFiles] = useState<File[]>([]);
+  const [styleFile, setStyleFile] = useState<File | null>(null);
+  const { layers, styles } = library;
+  const selected = layers.find(layer => layer.id === selectedId)!;
+  const selectedStyle = styles.find(style => style.id === selected.styleId)!;
   const sourceOpen = activePanel === 'source';
   const uploadOpen = activePanel === 'upload';
   const inspecting = inspectors.find(view => view.key === activePanel);
-  const filename = dataset?.filename ?? requestedSource.filename;
-  const inspection = useMemo(() => createInspection(dataset ? dataset.header : partialHeader, dataset?.data), [dataset, partialHeader]);
-  const views = { header: inspection, geojson: dataset?.data, style: dataset?.style ?? requestedSource.style };
-  const bounds = useMemo(() => dataset && getBounds(dataset.data), [dataset]);
+  const inspection = useMemo(() => createInspection(selected.dataset?.header ?? selected.partialHeader ?? null, selected.dataset?.data), [selected]);
+  const views = { header: inspection, geojson: selected.dataset?.data, style: selectedStyle.style };
+  const visibleLayers = useMemo(() => layers.filter((layer): layer is SourceLayer & { dataset: Dataset } => layer.visible && !!layer.dataset), [layers]);
+  const bounds = useMemo(() => layerBounds(visibleLayers), [visibleLayers]);
+  const pendingLayers = layers.filter(layer => layer.loading || layer.error || displayErrors[layer.id]);
+
+  function updateLayer(id: string, changes: Partial<SourceLayer>) {
+    setLibrary(current => ({ ...current, layers: current.layers.map(layer => layer.id === id ? { ...layer, ...changes } : layer) }));
+  }
+
+  function moveLayer(layerId: string, targetId: string, placement: LayerPlacement) {
+    setLibrary(current => {
+      if (layerId === targetId) return current;
+      const ordered = [...current.layers].reverse();
+      const from = ordered.findIndex(layer => layer.id === layerId);
+      if (from < 0 || !ordered.some(layer => layer.id === targetId)) return current;
+      const [moved] = ordered.splice(from, 1);
+      const target = ordered.findIndex(layer => layer.id === targetId);
+      const to = target + (placement === 'after' ? 1 : 0);
+      if (from === to) return current;
+      ordered.splice(to, 0, moved);
+      return { ...current, layers: ordered.reverse() };
+    });
+  }
 
   function togglePanel(panel: Exclude<ActivePanel, null>) {
     setActivePanel(active => active === panel ? null : panel);
   }
 
   function centerMap(duration = 0) {
-    if (bounds) mapRef.current?.fitBounds(bounds, { padding: 48, maxZoom: 18, duration, bearing: 0, pitch: 0 });
+    if (bounds) mapRef.current?.fitBounds(bounds, { ...fitOptions, duration });
   }
 
-  async function loadSource(source: BundledSource, autoCenter = true) {
-    sourceRequest.current?.abort();
+  async function loadSource(source: SourceLayer, autoCenter = true) {
+    if (!source.url) return;
+    sourceRequests.current[source.id]?.abort();
     const controller = new AbortController();
-    sourceRequest.current = controller;
-    setRequestedSource(source);
-    setLoading(true);
-    setSourceError(null);
-    setPartialHeader(null);
+    sourceRequests.current[source.id] = controller;
+    updateLayer(source.id, { loading: true, error: undefined, partialHeader: undefined });
     try {
       const response = await fetch(source.url, { signal: controller.signal });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const decoded = await decodeFgb(await response.arrayBuffer(), controller.signal, header => {
-        if (!controller.signal.aborted) setPartialHeader(header);
+        if (!controller.signal.aborted) updateLayer(source.id, { partialHeader: header });
       });
       if (controller.signal.aborted) return;
-      setDataset({ filename: source.filename, style: source.style, builtInId: source.id, autoCenter, ...decoded });
-      setError(null);
+      if (autoCenter) pendingCenters.current.add(source.id);
+      updateLayer(source.id, { dataset: { filename: source.filename, ...decoded }, loading: false });
     } catch (cause) {
       if (!controller.signal.aborted) {
-        setSourceError(`Unable to load ${source.label} (${cause instanceof Error ? cause.message : cause}). Try again or select another source.`);
+        updateLayer(source.id, { loading: false, error: `Unable to load ${source.label}: ${getErrorMessage(cause)}` });
       }
     } finally {
-      if (!controller.signal.aborted) {
-        setLoading(false);
-        sourceRequest.current = null;
-      }
+      if (sourceRequests.current[source.id] === controller) delete sourceRequests.current[source.id];
     }
   }
 
-  function selectSource(source: BundledSource) {
-    if (uploading) return;
-    setActivePanel(null);
-    sourceButton.current?.focus();
-    void loadSource(source);
+  function setVisible(source: SourceLayer, visible: boolean) {
+    if (!visible) {
+      sourceRequests.current[source.id]?.abort();
+      delete sourceRequests.current[source.id];
+      pendingCenters.current.delete(source.id);
+      updateLayer(source.id, { visible: false, loading: false, error: undefined });
+      return;
+    }
+    if (source.dataset) pendingCenters.current.add(source.id);
+    updateLayer(source.id, { visible: true });
+    if (!source.dataset) void loadSource(source);
+  }
+
+  function assignStyle(source: SourceLayer, styleId: string) {
+    const stylesheet = styles.find(style => style.id === styleId);
+    if (!stylesheet || getStyleMismatch(source.filename, stylesheet.style)) return;
+    updateLayer(source.id, { styleId });
   }
 
   async function uploadFiles(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!files.fgb || !files.style || uploading) return;
+    if (!fgbFiles.length || !styleFile || uploading) return;
     const request = ++uploadRequest.current;
     setUploading(true);
     setUploadError(null);
     try {
-      const next = await readDataset(files.fgb, files.style);
-      if (request !== uploadRequest.current) return;
-      sourceRequest.current?.abort();
-      sourceRequest.current = null;
-      setLoading(false);
-      setSourceError(null);
-      setPartialHeader(null);
-      setDataset({ ...next, autoCenter: true });
-      setError(null);
-      restoreUploadFocus.current = true;
+      const style = await readStylesheet(styleFile);
+      const datasets: Dataset[] = [];
+      // Commit only after every file succeeds; existing layers survive a bad batch.
+      for (const file of fgbFiles) {
+        datasets.push(await readDataset(file, style));
+        if (request !== uploadRequest.current) return;
+      }
+      const batch = ++nextBatch.current;
+      const styleId = `upload-style-${batch}`;
+      const added = datasets.map((dataset, index): SourceLayer => ({
+        id: `upload-${batch}-${index}`, label: `${dataset.filename} (upload ${batch}, ${index + 1})`,
+        filename: dataset.filename, styleId, visible: true, dataset,
+      }));
+      added.forEach(layer => pendingCenters.current.add(layer.id));
+      setLibrary(current => ({
+        layers: [...current.layers, ...added],
+        styles: [...current.styles, { id: styleId, label: `${styleFile.name} (upload ${batch})`, style }],
+      }));
+      setSelectedId(added[0].id);
+      setActivePanel('source');
     } catch (cause) {
-      if (request === uploadRequest.current) setUploadError(cause instanceof Error ? cause.message : 'Unable to load these files.');
+      if (request === uploadRequest.current) setUploadError(getErrorMessage(cause, 'Unable to load these files.'));
     } finally {
       if (request === uploadRequest.current) setUploading(false);
     }
   }
 
   useEffect(() => {
-    if (!uploading && restoreUploadFocus.current) {
-      restoreUploadFocus.current = false;
-      if (activePanel === 'upload') {
-        setActivePanel(null);
-        uploadButton.current?.focus();
-      }
-    }
-  }, [activePanel, uploading]);
-
-  useEffect(() => {
     if (sourceOpen) {
       const panel = sourcePanel.current;
-      (panel?.querySelector<HTMLButtonElement>('[aria-pressed="true"]') ?? panel?.querySelector('button'))?.focus();
+      (panel?.querySelector<HTMLInputElement>('[data-selected="true"] input') ?? panel?.querySelector('input'))?.focus();
     }
   }, [sourceOpen]);
 
   useEffect(() => {
+    if (inspecting) inspectorPanel.current?.focus();
+  }, [inspecting, selectedId]);
+
+  useEffect(() => {
+    function cancelRequests() {
+      Object.values(sourceRequests.current).forEach(controller => controller.abort());
+      sourceRequests.current = {};
+      uploadRequest.current++;
+    }
     setMapReady(false);
     let map: Map;
     try {
-      map = new Map({ container: container.current!, style: 'https://tiles.openfreemap.org/styles/liberty', center: sampleStyle.center, zoom: sampleStyle.zoom });
+      map = new Map({ container: container.current!, style: 'https://tiles.openfreemap.org/styles/liberty', center: initialStyle.center, zoom: initialStyle.zoom });
     } catch {
       setError('Unable to start the map. Check that WebGL is available in your browser.');
-      return () => { sourceRequest.current?.abort(); uploadRequest.current++; };
+      return cancelRequests;
     }
     mapRef.current = map;
     map.addControl(new NavigationControl(), 'top-right');
     map.on('load', () => setMapReady(true));
     map.on('error', () => setError('Some map resources could not be loaded. Check your connection and reload.'));
 
-    void loadSource(bundledSources[0], false);
+    void loadSource(initialSource);
     return () => {
-      sourceRequest.current?.abort();
-      uploadRequest.current++;
+      cancelRequests();
       map.remove();
       mapRef.current = null;
     };
@@ -171,80 +256,34 @@ export default function App() {
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady || !dataset) return;
-    const { data, style } = dataset;
-    const sourceId = getSourceName(dataset.filename);
-    const layerIds: string[] = [];
-    const popup = new Popup({ className: 'obstacle-popup', closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 48px))' });
-    const canvas = map.getCanvas();
-    const events = [['click', showFeature], ['mousemove', updateCursor]] as const;
-    let sourceAdded = false;
-
-    function findFeature({ point: { x, y } }: MapMouseEvent) {
-      const hit = map!.queryRenderedFeatures([[x - 4, y - 4], [x + 4, y + 4]], { layers: layerIds })[0];
-      return hit && data.features.find(feature => feature.id === hit.id);
-    }
-    function showFeature(event: MapMouseEvent) {
-      popup.remove();
-      const feature = findFeature(event);
-      if (!feature) return;
-      const content = document.createElement('div');
-      const title = Object.assign(document.createElement('h2'), { className: 'obstacle-popup-title', textContent: 'Feature properties' });
-      const properties = Object.assign(document.createElement('pre'), {
-        className: 'obstacle-properties', tabIndex: 0, textContent: JSON.stringify(feature.properties, null, 2),
-      });
-      properties.setAttribute('aria-label', 'Feature properties');
-      content.append(title, properties);
-      popup.setLngLat(event.lngLat).setDOMContent(content).addTo(map!);
-    }
-    function updateCursor(event: MapMouseEvent) {
-      canvas.style.cursor = findFeature(event) ? 'pointer' : '';
-    }
-    function resetCursor() { canvas.style.cursor = ''; }
-
-    try {
-      if (map.getSource(sourceId)) throw new Error(`Source "${sourceId}" conflicts with the basemap.`);
-      map.addSource(sourceId, { ...style.sources[sourceId], type: 'geojson', data });
-      sourceAdded = true;
-      // Only the matching source's layers belong above the street basemap.
-      for (const layer of style.layers) {
-        if (!('source' in layer) || layer.source !== sourceId) continue;
-        const id = `geoflatpack-${layer.id}`;
-        map.addLayer({ ...layer, id, source: sourceId });
-        layerIds.push(id);
-      }
-      if (dataset.autoCenter) centerMap();
-      for (const [event, handler] of events) map.on(event, handler);
-      canvas.addEventListener('mouseleave', resetCursor);
-    } catch (cause) {
-      setError(`Unable to display ${dataset.filename} (${cause instanceof Error ? cause.message : cause}). Try loading the files again.`);
-    }
-    return () => {
-      popup.remove();
-      for (const [event, handler] of events) map.off(event, handler);
-      canvas.removeEventListener('mouseleave', resetCursor);
-      resetCursor();
-      if (mapRef.current !== map) return; // Map teardown already removed its layers and source.
-      for (const id of layerIds) if (map.getLayer(id)) map.removeLayer(id);
-      if (sourceAdded && map.getSource(sourceId)) map.removeSource(sourceId);
-    };
-  }, [dataset, mapReady]);
+    if (!map || !mapReady) return;
+    const { cleanup, errors, renderedLayerIds } = renderMapLayers(map, visibleLayers.map(layer => ({
+      layer, style: styles.find(style => style.id === layer.styleId)!.style,
+    })));
+    setDisplayErrors(errors);
+    const newlyVisible = visibleLayers.filter(layer => renderedLayerIds.has(layer.id) && pendingCenters.current.has(layer.id));
+    const nextBounds = layerBounds(newlyVisible);
+    newlyVisible.forEach(layer => pendingCenters.current.delete(layer.id));
+    if (nextBounds) map.fitBounds(nextBounds, fitOptions);
+    return () => cleanup(mapRef.current === map);
+  }, [visibleLayers, styles, mapReady]);
 
   return (
     <main>
-      <div ref={container} className="map" aria-label={`Map of ${filename}`} />
+      <div ref={container} className="map" aria-label={`Map layers: ${visibleLayers.map(layer => layer.label).join(', ') || 'basemap only'}`} />
       <div className="map-overlay" onKeyDown={event => {
-        if (event.key === 'Escape' && sourceOpen) {
+        if (event.key === 'Escape' && activePanel) {
           event.preventDefault();
           setActivePanel(null);
-          sourceButton.current?.focus();
+          (uploadOpen ? uploadButton : sourceButton).current?.focus();
         }
       }}>
         <div className="map-toolbar">
           <div className="inspector-controls">
             <button ref={uploadButton} type="button" className="inspector-toggle" disabled={uploading}
               aria-expanded={uploadOpen} aria-controls="upload-panel" onClick={() => {
-                setFiles({});
+                setFgbFiles([]);
+                setStyleFile(null);
                 setUploadError(null);
                 togglePanel('upload');
               }}>
@@ -252,7 +291,7 @@ export default function App() {
             </button>
             <button ref={sourceButton} type="button" className="inspector-toggle" disabled={uploading}
               aria-expanded={sourceOpen} aria-controls="source-panel" onClick={() => togglePanel('source')}>
-              Select source
+              Select sources
             </button>
             {inspectors.map(view => (
               <button key={view.key} type="button" className="inspector-toggle" disabled={!views[view.key]}
@@ -268,64 +307,83 @@ export default function App() {
           </button>
         </div>
         {sourceOpen && (
-          <div ref={sourcePanel} id="source-panel" className="source-panel" role="group" aria-label="Select source">
-            {bundledSources.map(source => (
-              <button key={source.id} type="button" className="inspector-toggle" disabled={uploading}
-                aria-pressed={dataset?.builtInId === source.id} onClick={() => selectSource(source)}>
-                {source.label}{dataset?.builtInId === source.id ? ' (current)' : ''}
-              </button>
+          <div ref={sourcePanel} id="source-panel" className="source-panel" role="group" aria-label="Select sources">
+            <p>Show layers together. Choose a compatible stylesheet for each layer.</p>
+            {layers.map(layer => (
+              <div key={layer.id} className="source-row" data-selected={selectedId === layer.id}>
+                <label className="source-visibility" title={layer.filename}>
+                  <input type="checkbox" checked={layer.visible} onChange={event => setVisible(layer, event.target.checked)} />
+                  <span>{layer.label}</span>
+                </label>
+                <label className="source-style">
+                  Stylesheet
+                  <select value={layer.styleId} onChange={event => assignStyle(layer, event.target.value)}>
+                    {styles.filter(style => !getStyleMismatch(layer.filename, style.style)).map(style => (
+                      <option key={style.id} value={style.id}>{style.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <button type="button" className="inspector-toggle" aria-label={`Inspect ${layer.label}`}
+                  onClick={() => {
+                    setSelectedId(layer.id);
+                    setActivePanel(layer.dataset || layer.partialHeader ? 'header' : 'style');
+                  }}>
+                  Inspect{selectedId === layer.id ? ' (current)' : ''}
+                </button>
+                <LayerStatus layer={layer} displayError={displayErrors[layer.id]} onRetry={() => void loadSource(layer)} />
+              </div>
             ))}
           </div>
         )}
         {uploadOpen && (
           <form id="upload-panel" className="upload-panel" onSubmit={uploadFiles} aria-label="Upload map files">
-            <p>Choose a FlatGeobuf file and its MapLibre JSON stylesheet. Files are read locally in your browser.</p>
-            <p>The style source must match the FGB filename without its extension.</p>
+            <p>Choose one or more FlatGeobuf files and one MapLibre JSON stylesheet. All files in this batch use that stylesheet.</p>
+            <p>Each FGB filename without its extension must match a source in the stylesheet. Files stay in your browser.</p>
             <fieldset disabled={uploading}>
-              {Object.entries(fileFields).map(([key, [label, accept]]) => (
-                <label key={key}>
-                  {label}
-                  <input type="file" accept={accept} required onChange={event => {
-                    const file = event.target.files?.[0];
-                    setFiles(current => ({ ...current, [key]: file }));
-                    setUploadError(null);
-                  }} />
-                </label>
-              ))}
-              <button type="submit" className="inspector-toggle" disabled={!files.fgb || !files.style}>
-                {uploading ? 'Reading files…' : 'Display on map'}
+              <label>
+                FlatGeobuf files
+                <input type="file" accept=".fgb" multiple required onChange={event => {
+                  setFgbFiles(Array.from(event.target.files ?? []));
+                  setUploadError(null);
+                }} />
+              </label>
+              <label>
+                MapLibre stylesheet
+                <input type="file" accept=".json,application/json" required onChange={event => {
+                  setStyleFile(event.target.files?.[0] ?? null);
+                  setUploadError(null);
+                }} />
+              </label>
+              <button type="submit" className="inspector-toggle" disabled={!fgbFiles.length || !styleFile}>
+                {uploading ? 'Reading files…' : 'Add layers'}
               </button>
             </fieldset>
             {uploading && <p role="status">Reading files…</p>}
             {uploadError && <p role="alert">{uploadError}</p>}
           </form>
         )}
-        {(!dataset || !mapReady || error || sourceError || loading) && (
-          <div className="map-status" role={error || sourceError ? 'alert' : 'status'}>
-            {error ?? sourceError ?? (loading ? `Loading ${requestedSource.label}…` : `Loading map and ${filename}…`)}
-            {sourceError && (
-              <button type="button" className="inspector-toggle source-retry" disabled={uploading}
-                onClick={() => {
-                  sourceButton.current?.focus();
-                  void loadSource(requestedSource);
-                }}>
-                Retry {requestedSource.label}
-              </button>
-            )}
+        {(!mapReady || error) && <div className="map-status" role={error ? 'alert' : 'status'}>{error ?? 'Loading map…'}</div>}
+        {!sourceOpen && pendingLayers.length > 0 && (
+          <div className="map-status">
+            {pendingLayers.map(layer => (
+              <div key={layer.id}>
+                <LayerStatus layer={layer} displayError={displayErrors[layer.id]} onRetry={() => void loadSource(layer)} compact />
+              </div>
+            ))}
           </div>
         )}
         {inspecting && views[inspecting.key] && (
-          <section key={inspecting.key} id="inspector-panel" className="inspector-panel" tabIndex={0}
-            aria-label={inspecting.title}>
-            {inspecting.key === 'header' ? (
-              <>
-                <h2 className="header-panel-title">{inspecting.title}</h2>
-                <div className="header-tree"><HeaderTree value={views.header} /></div>
-              </>
-            ) : <pre className="inspector-json">{JSON.stringify(views[inspecting.key], null, 2)}</pre>}
+          <section ref={inspectorPanel} key={`${inspecting.key}-${selectedId}`} id="inspector-panel" className="inspector-panel" tabIndex={0}
+            aria-label={`${inspecting.title}: ${selected.label}`}>
+            <h2 className="header-panel-title">{inspecting.title}</h2>
+            <p className="inspector-source">{selected.label}{inspecting.key === 'style' && <> — {selectedStyle.label}</>}</p>
+            {inspecting.key === 'header'
+              ? <div className="header-tree"><HeaderTree value={views.header} /></div>
+              : <pre className="inspector-json">{JSON.stringify(views[inspecting.key], null, 2)}</pre>}
           </section>
         )}
       </div>
+      <LayerOrderControl layers={layers} displayErrors={displayErrors} onMove={moveLayer} />
     </main>
   );
 }

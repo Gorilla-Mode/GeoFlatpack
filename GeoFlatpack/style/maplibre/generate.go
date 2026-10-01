@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image/color"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -43,7 +44,7 @@ type LayerStyle struct {
 	Data          *fgb.Fgb
 	SourceID      string
 	CategoryField string
-	Paints        map[StyleGroup]Paint
+	Styles        map[StyleGroup][]RenderLayerStyle
 }
 
 // BuildMapLibreCollectionStyle draws polygons, lines, then points, retaining
@@ -84,18 +85,41 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle) (*StyleH
 				}
 
 				id := fmt.Sprintf("%s-%s-%d", input.SourceID, geometry, j)
-				paint := input.Paints[group]
-				var layer StyleLayer
-
-				switch geometry {
-				case Point:
-					layer = PointLayer(id, input.SourceID, input.CategoryField, group, paint)
-				case Line:
-					layer = LineLayer(id, input.SourceID, input.CategoryField, group, paint)
-				case Polygon:
-					layer = PolygonLayer(id, input.SourceID, input.CategoryField, group, paint)
+				stack, configured := input.Styles[group]
+				if !configured {
+					stack = []RenderLayerStyle{{Type: RenderTypes[geometry][0]}}
 				}
-				mapStyle.Layers = append(mapStyle.Layers, layer)
+				if len(stack) == 0 {
+					return nil, fmt.Errorf("group %q: empty style stack", id)
+				}
+				hasLine := slices.ContainsFunc(stack, func(style RenderLayerStyle) bool {
+					return style.Type == "line"
+				})
+				for k, layerStyle := range stack {
+					if !slices.Contains(RenderTypes[geometry], layerStyle.Type) {
+						return nil, fmt.Errorf("group %q: unsupported render type %q for %s", id, layerStyle.Type, geometry)
+					}
+					layerID := id
+					if k > 0 {
+						layerID = fmt.Sprintf("%s-%d", id, k)
+					}
+					var layer StyleLayer
+
+					switch layerStyle.Type {
+					case "circle":
+						layer = PointLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
+					case "line":
+						layer = LineLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
+					case "fill":
+						layer = PolygonLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
+
+						if _, explicit := layerStyle.Paint["fill-outline-color"]; hasLine && !explicit {
+							layer.Paint["fill-outline-color"] = "transparent"
+						}
+					}
+
+					mapStyle.Layers = append(mapStyle.Layers, layer)
+				}
 			}
 		}
 	}

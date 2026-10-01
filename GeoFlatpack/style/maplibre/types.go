@@ -9,6 +9,18 @@ const (
 	Polygon GeometryType = "Polygon"
 )
 
+// The first render type is the default for an unconfigured geometry group.
+var RenderTypes = map[GeometryType][]string{
+	Polygon: {"fill", "line", "circle"},
+	Line:    {"line"},
+	Point:   {"circle"},
+}
+
+type RenderLayerStyle struct {
+	Type  string
+	Paint Paint
+}
+
 type StyleGroup struct {
 	GeometryType GeometryType
 	Category     CategoryValue
