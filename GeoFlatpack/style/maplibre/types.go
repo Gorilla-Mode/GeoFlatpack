@@ -11,7 +11,7 @@ const (
 
 // The first render type is the default for an unconfigured geometry group.
 var RenderTypes = map[GeometryType][]string{
-	Polygon: {"fill", "line"},
+	Polygon: {"fill", "line", "circle"},
 	Line:    {"line"},
 	Point:   {"circle"},
 }
