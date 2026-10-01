@@ -31,6 +31,7 @@ func LoadSpec() (Spec, error) {
 func (s Spec) Properties(layerType, section string) (map[string]PropertySpec, error) {
 	key := section + "_" + layerType
 	data, ok := s[key]
+
 	if !ok {
 		return nil, fmt.Errorf("unknown property section %q", key)
 	}

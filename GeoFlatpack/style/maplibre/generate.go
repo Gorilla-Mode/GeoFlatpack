@@ -46,19 +46,6 @@ type LayerStyle struct {
 	Paints        map[StyleGroup]Paint
 }
 
-func BuildMapLibreStyle(
-	data *fgb.Fgb,
-	filename, sourceName, field string,
-	paints map[StyleGroup]Paint,
-) (*StyleHeader, error) {
-	if sourceName == "" {
-		sourceName = styleName(filename)
-	}
-	return BuildMapLibreCollectionStyle(filename, []LayerStyle{{
-		Data: data, SourceID: sourceName, CategoryField: field, Paints: paints,
-	}})
-}
-
 // BuildMapLibreCollectionStyle draws polygons, lines, then points, retaining
 // input order within each geometry type. Empty inputs still contribute sources.
 func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle) (*StyleHeader, error) {
@@ -66,32 +53,40 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle) (*StyleH
 	mapStyle, _ := NewMapLibreStyle(filename, "", backgroundPaint)
 	mapStyle.Sources = make(map[string]map[string]any, len(inputs))
 	groups := make([][]StyleGroup, len(inputs))
+
 	for i, input := range inputs {
 		if input.SourceID == "" {
 			return nil, fmt.Errorf("layer %d: empty source ID", i+1)
 		}
+
 		if _, exists := mapStyle.Sources[input.SourceID]; exists {
 			return nil, fmt.Errorf("duplicate source ID %q", input.SourceID)
 		}
+
 		mapStyle.Sources[input.SourceID] = map[string]any{
 			"type": "geojson",
 			"data": map[string]any{"type": "FeatureCollection", "features": []any{}},
 		}
+
 		var err error
 		groups[i], err = CollectStyleGroups(input.Data, input.CategoryField)
+
 		if err != nil {
 			return nil, fmt.Errorf("source %q: %w", input.SourceID, err)
 		}
 	}
+
 	for _, geometry := range []GeometryType{Polygon, Line, Point} {
 		for i, input := range inputs {
 			for j, group := range groups[i] {
 				if group.GeometryType != geometry {
 					continue
 				}
+
 				id := fmt.Sprintf("%s-%s-%d", input.SourceID, geometry, j)
 				paint := input.Paints[group]
 				var layer StyleLayer
+
 				switch geometry {
 				case Point:
 					layer = PointLayer(id, input.SourceID, input.CategoryField, group, paint)
