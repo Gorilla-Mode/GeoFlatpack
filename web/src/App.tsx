@@ -4,6 +4,8 @@ import { Map, NavigationControl, setWorkerUrl } from 'maplibre-gl';
 import type { StyleSpecification } from 'maplibre-gl';
 import mapWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import HeaderTree from './HeaderTree';
+import LayerOrderControl from './LayerOrderControl';
+import type { LayerPlacement } from './LayerOrderControl';
 import { createInspection } from './inspection';
 import { decodeFgb, getBounds, getErrorMessage, getStyleMismatch, readDataset, readStylesheet } from './dataset';
 import type { Dataset, SourceLayer, Stylesheet } from './dataset';
@@ -24,7 +26,7 @@ const bundledStyles: Stylesheet[] = [
 ];
 // Use the original filenames, not Vite's hashed asset URLs, for style matching.
 const bundledSources: SourceLayer[] = [
-  { id: 'obstacles', label: 'Sample obstacles', filename: 'sample-obstacles.fgb', url: sampleUrl, styleId: 'obstacles', visible: true },
+  { id: 'obstacles', label: 'Sample obstacles', filename: 'sample-obstacles.fgb', url: sampleUrl, styleId: 'obstacles', visible: false },
   {
     id: 'stations', label: 'Brannstasjoner',
     filename: 'Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb',
@@ -33,7 +35,7 @@ const bundledSources: SourceLayer[] = [
   {
     id: 'skytefelt-area', label: 'Skytefelt areas',
     filename: 'Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt.fgb',
-    url: skytefeltAreaUrl, styleId: 'skytefelt', visible: false,
+    url: skytefeltAreaUrl, styleId: 'skytefelt', visible: true,
   },
   {
     id: 'skytefelt-boundary', label: 'Skytefelt boundaries',
@@ -41,6 +43,8 @@ const bundledSources: SourceLayer[] = [
     url: skytefeltBoundaryUrl, styleId: 'skytefelt', visible: false,
   },
 ];
+const initialSource = bundledSources.find(layer => layer.visible)!;
+const initialStyle = bundledStyles.find(style => style.id === initialSource.styleId)!.style;
 const inspectors = [
   { key: 'header', label: 'Header', title: 'Parsed header and features' },
   { key: 'geojson', label: 'GeoJSON', title: 'Decoded GeoJSON' },
@@ -88,7 +92,7 @@ export default function App() {
   const inspectorPanel = useRef<HTMLElement>(null);
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const [library, setLibrary] = useState({ layers: bundledSources, styles: bundledStyles });
-  const [selectedId, setSelectedId] = useState(bundledSources[0].id);
+  const [selectedId, setSelectedId] = useState(initialSource.id);
   const [mapReady, setMapReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [displayErrors, setDisplayErrors] = useState<Record<string, string>>({});
@@ -110,6 +114,21 @@ export default function App() {
 
   function updateLayer(id: string, changes: Partial<SourceLayer>) {
     setLibrary(current => ({ ...current, layers: current.layers.map(layer => layer.id === id ? { ...layer, ...changes } : layer) }));
+  }
+
+  function moveLayer(layerId: string, targetId: string, placement: LayerPlacement) {
+    setLibrary(current => {
+      if (layerId === targetId) return current;
+      const ordered = [...current.layers].reverse();
+      const from = ordered.findIndex(layer => layer.id === layerId);
+      if (from < 0 || !ordered.some(layer => layer.id === targetId)) return current;
+      const [moved] = ordered.splice(from, 1);
+      const target = ordered.findIndex(layer => layer.id === targetId);
+      const to = target + (placement === 'after' ? 1 : 0);
+      if (from === to) return current;
+      ordered.splice(to, 0, moved);
+      return { ...current, layers: ordered.reverse() };
+    });
   }
 
   function togglePanel(panel: Exclude<ActivePanel, null>) {
@@ -217,7 +236,7 @@ export default function App() {
     setMapReady(false);
     let map: Map;
     try {
-      map = new Map({ container: container.current!, style: 'https://tiles.openfreemap.org/styles/liberty', center: sampleStyle.center, zoom: sampleStyle.zoom });
+      map = new Map({ container: container.current!, style: 'https://tiles.openfreemap.org/styles/liberty', center: initialStyle.center, zoom: initialStyle.zoom });
     } catch {
       setError('Unable to start the map. Check that WebGL is available in your browser.');
       return cancelRequests;
@@ -227,7 +246,7 @@ export default function App() {
     map.on('load', () => setMapReady(true));
     map.on('error', () => setError('Some map resources could not be loaded. Check your connection and reload.'));
 
-    void loadSource(bundledSources[0], false);
+    void loadSource(initialSource);
     return () => {
       cancelRequests();
       map.remove();
@@ -364,6 +383,7 @@ export default function App() {
           </section>
         )}
       </div>
+      <LayerOrderControl layers={layers} displayErrors={displayErrors} onMove={moveLayer} />
     </main>
   );
 }
