@@ -26,9 +26,11 @@ type MemoryFGB struct {
 func GmlToFgb(input string, forceEPSG4326 bool, skipFailures bool) (files []*MemoryFGB, err error) {
 	godal.RegisterAll()
 	src, err := godal.Open(input, godal.VectorOnly(), godal.DriverOpenOption("WRITE_GFS=NO"))
+
 	if err != nil {
 		return nil, fmt.Errorf("open GML: %w", err)
 	}
+
 	defer func() {
 		if closeErr := src.Close(); closeErr != nil {
 			err = errors.Join(err, fmt.Errorf("close GML: %w", closeErr))
@@ -43,6 +45,7 @@ func GmlToFgb(input string, forceEPSG4326 bool, skipFailures bool) (files []*Mem
 	if _, err := rand.Read(id[:]); err != nil {
 		return nil, err
 	}
+
 	return convertLayers(src, fmt.Sprintf("/vsimem/gfp-%x", id[:]), forceEPSG4326, skipFailures)
 }
 
@@ -51,6 +54,7 @@ func convertLayers(src *godal.Dataset, prefix string, forceEPSG4326, skipFailure
 	if len(layers) == 0 {
 		return nil, fmt.Errorf("input has no layers")
 	}
+
 	defer func() {
 		if err != nil {
 			for _, file := range files {
@@ -59,6 +63,7 @@ func convertLayers(src *godal.Dataset, prefix string, forceEPSG4326, skipFailure
 			files = nil
 		}
 	}()
+
 	for i, layer := range layers {
 		listColumns, schemaErr := layerListColumns(layer)
 		if schemaErr != nil {
@@ -71,6 +76,7 @@ func convertLayers(src *godal.Dataset, prefix string, forceEPSG4326, skipFailure
 		file.ListColumns = listColumns
 		files = append(files, file)
 	}
+
 	return files, nil
 }
 
@@ -78,10 +84,13 @@ func layerListColumns(layer godal.Layer) ([]string, error) {
 	// A detached, empty feature exposes the layer definition without reading
 	// any source features. Passing nil geometry does not insert a feature.
 	definition, err := layer.NewFeature(nil)
+
 	if err != nil {
 		return nil, err
 	}
+
 	defer definition.Close()
+
 	var names []string
 	for name, field := range definition.Fields() {
 		switch field.Type() {
@@ -89,7 +98,9 @@ func layerListColumns(layer godal.Layer) ([]string, error) {
 			names = append(names, name)
 		}
 	}
+
 	sort.Strings(names)
+
 	return names, nil
 }
 
@@ -100,29 +111,38 @@ func convertLayer(src *godal.Dataset, name, path string, forceEPSG4326, skipFail
 			_ = godal.VSIUnlink(path)
 		}
 	}()
+
 	args := []string{"-f", "FlatGeobuf", "-lco", "TEMPORARY_DIR=/vsimem/",
 		"-mapFieldType", "StringList=String(JSON),IntegerList=String(JSON),Integer64List=String(JSON),RealList=String(JSON)"}
+
 	if forceEPSG4326 {
 		args = append(args, "-t_srs", "EPSG:4326")
 	}
+
 	if skipFailures {
 		args = append(args, "-skipfailures")
 	}
+
 	args = append(args, name)
 	dst, err := src.VectorTranslate(path, args)
+
 	if err != nil {
 		if dst != nil {
 			_ = dst.Close()
 		}
+
 		return nil, fmt.Errorf("convert GML to FGB: %w", err)
 	}
+
 	if err := dst.Close(); err != nil {
 		return nil, fmt.Errorf("finish FGB: %w", err)
 	}
 	dataset, err := godal.Open(path, godal.VectorOnly())
+
 	if err != nil {
 		return nil, fmt.Errorf("reopen FGB: %w", err)
 	}
+	
 	keep = true
 	return &MemoryFGB{LayerName: name, Dataset: dataset, path: path}, nil
 }
