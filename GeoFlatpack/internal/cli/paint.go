@@ -55,6 +55,7 @@ func PromptStyles(
 	if len(options) > 0 {
 		opts = options[0]
 	}
+
 	spec, err := maplibre.LoadSpec()
 	if err != nil {
 		return nil, err
@@ -71,6 +72,7 @@ func PromptStyles(
 		if len(types) == 0 {
 			return nil, fmt.Errorf("unsupported geometry: %s", group.GeometryType)
 		}
+		
 		if len(opts.Icons) > 0 {
 			if group.GeometryType == maplibre.Point || opts.WriteFGB {
 				types = append(types, "SVG icon")
@@ -327,7 +329,7 @@ func promptIcon(icons map[string]svg.Svg, scanner *bufio.Scanner, out io.Writer)
 			return "", nil, err
 		}
 	}
-	
+
 	ignorePlacement := false
 	for {
 		input, err := promptLine(scanner, out, "WARNING: More performance intensive .\nIgnore icon placement [false]:")
