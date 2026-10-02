@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // Model retains workflow options for future processing screens.
@@ -63,12 +64,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) View() tea.View {
 	width := max(1, m.width-m.styles.frame.GetHorizontalFrameSize())
-	content := strings.Join([]string{
+	height := max(1, m.height-m.styles.frame.GetVerticalFrameSize())
+
+	helpText := m.styles.helpBox.
+		Width(max(1, width-m.styles.helpBox.GetHorizontalFrameSize())).
+		Render(m.help.View(m.keys))
+
+	body := strings.Join([]string{
 		m.styles.title.Width(width).Render("GeoFlatpack"),
-		m.styles.message.Width(width).Render("TUI scaffold. File processing is not connected yet."),
-		m.help.View(m.keys),
+		m.styles.message.Width(width).Render(
+			"TUI scaffold. File processing is not connected yet.",
+		),
 	}, "\n\n")
-	view := tea.NewView(m.styles.frame.MaxWidth(m.width).MaxHeight(m.height).Render(content))
+
+	bodyHeight := max(0, height-lipgloss.Height(helpText)+1)
+
+	content := lipgloss.NewStyle().
+		Width(width).
+		Height(bodyHeight).
+		Render(body) + helpText
+
+	view := tea.NewView(
+		m.styles.frame.
+			Width(width).
+			Height(height).
+			Render(content),
+	)
+
 	view.AltScreen = true
 	return view
 }
