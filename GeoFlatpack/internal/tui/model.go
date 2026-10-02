@@ -42,16 +42,18 @@ type Model struct {
 	preparation *preparation
 }
 
+var _ tea.Model = (*Model)(nil)
+
 // NewModel creates a loading screen; Init schedules input preparation.
-func NewModel(opts app.Options) Model {
+func NewModel(opts app.Options) *Model {
 	return newModel(opts, prepareInput)
 }
 
-func newModel(opts app.Options, prepare prepareFunc) Model {
+func newModel(opts app.Options, prepare prepareFunc) *Model {
 	s := newStyles()
 	h := help.New()
 	h.Styles = s.help
-	m := Model{
+	m := &Model{
 		Options:     opts,
 		help:        h,
 		keys:        newKeyMap(),
@@ -69,11 +71,11 @@ func newModel(opts app.Options, prepare prepareFunc) Model {
 	return m
 }
 
-func (m Model) Init() tea.Cmd {
+func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.preparation.command(m.Options), m.spinner.Tick)
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case preparedMsg:
@@ -126,7 +128,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) View() tea.View {
+func (m *Model) View() tea.View {
 	m.refreshViewport()
 	view := tea.NewView(m.panel())
 	view.AltScreen = true

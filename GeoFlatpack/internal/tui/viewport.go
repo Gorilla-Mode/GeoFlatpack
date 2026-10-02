@@ -20,7 +20,7 @@ func (m *Model) refreshViewport() {
 	m.viewport.SetContent(ansi.Wrap(content, l.contentWidth, ""))
 }
 
-func (m Model) body(width int) string {
+func (m *Model) body(width int) string {
 	if m.screen == scaffoldScreen {
 		return panel.Scaffold()
 	}
@@ -44,6 +44,8 @@ func (m Model) body(width int) string {
 		opts.Spinner = m.spinner.View()
 	case failureScreen:
 		opts.State = panel.Failure
+	case completionScreen:
+	case scaffoldScreen:
 	}
 	if m.session != nil {
 		opts.Loaded = true

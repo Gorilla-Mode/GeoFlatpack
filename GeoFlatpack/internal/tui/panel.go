@@ -7,7 +7,7 @@ import (
 	"charm.land/bubbles/v2/key"
 )
 
-func (m Model) panel() string {
+func (m *Model) panel() string {
 	l := m.layout()
 	var sections []string
 

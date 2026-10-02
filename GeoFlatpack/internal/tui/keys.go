@@ -136,8 +136,3 @@ func (k detailKeyMap) FullHelp() [][]key.Binding {
 	},
 	}
 }
-
-type helpKeyMap struct {
-	keyMap
-	detailKeyMap
-}

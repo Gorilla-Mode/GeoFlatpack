@@ -15,7 +15,7 @@ func Run(opts app.Options, in io.Reader, out io.Writer) error {
 	return runModel(NewModel(opts), in, out)
 }
 
-func runModel(model Model, in io.Reader, out io.Writer, options ...tea.ProgramOption) (err error) {
+func runModel(model *Model, in io.Reader, out io.Writer, options ...tea.ProgramOption) (err error) {
 	defer func() {
 		err = errors.Join(err, model.preparation.finish())
 	}()

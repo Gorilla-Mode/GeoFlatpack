@@ -18,7 +18,7 @@ type panelLayout struct {
 	contentHeight int
 }
 
-func (m Model) layout() panelLayout {
+func (m *Model) layout() panelLayout {
 	frame := lipgloss.NewStyle()
 	// Restore the original outer padding when the body has room to use it.
 	if m.width >= 24 && m.height >= 18 {
