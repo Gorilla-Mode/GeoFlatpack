@@ -8,18 +8,6 @@ import (
 	"strings"
 )
 
-type PropertyType string
-
-const (
-	ColorType     PropertyType = "color"
-	StringType    PropertyType = "string"
-	EnumType      PropertyType = "enum"
-	BooleanType   PropertyType = "boolean"
-	NumberType    PropertyType = "number"
-	ArrayType     PropertyType = "array"
-	ReferenceType PropertyType = "reference"
-)
-
 func ParseProperty(input string, property PropertySpec) (any, error) {
 	input = strings.TrimSpace(input)
 
@@ -33,26 +21,26 @@ func ParseProperty(input string, property PropertySpec) (any, error) {
 	}
 
 	switch property.Type {
-	case string(ColorType):
+	case ColorType:
 		return style.ParseRGB(input)
 
-	case string(StringType), string(ReferenceType):
+	case StringType, ReferenceType:
 		return input, nil
 
-	case string(EnumType):
+	case EnumType:
 		if _, ok := property.Values[input]; !ok {
 			return nil, fmt.Errorf("invalid choice %q", input)
 		}
 
 		return input, nil
 
-	case string(BooleanType):
+	case BooleanType:
 		return strconv.ParseBool(input)
 
-	case string(NumberType):
+	case NumberType:
 		return parseNumberProperty(input, property)
 
-	case string(ArrayType):
+	case ArrayType:
 		return parseArrayProperty(input, property)
 
 	default:

@@ -2,6 +2,13 @@ package fgb
 
 import "github.com/gogama/flatgeobuf/flatgeobuf/flat"
 
+type VertexKind string
+
+const (
+	VertexLineString VertexKind = "LineString"
+	VertexPolygon    VertexKind = "Polygon"
+)
+
 type RawFgb struct {
 	header   *flat.Header
 	Features []flat.Feature

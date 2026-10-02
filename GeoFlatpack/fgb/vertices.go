@@ -10,10 +10,10 @@ import (
 )
 
 // WithVertexCompanions creates one MultiPoint per selected original feature.
-// The selection maps feature indices to "LineString" or "Polygon" markers.
+// The selection maps feature indices to VertexLineString or VertexPolygon markers.
 // The input is never modified. If all selected geometries are empty, the
 // original dataset is returned along with the reserved marker name.
-func WithVertexCompanions(data *Fgb, selected map[int]string) (*Fgb, string, error) {
+func WithVertexCompanions(data *Fgb, selected map[int]VertexKind) (*Fgb, string, error) {
 	if data == nil || data.Header == nil {
 		return nil, "", fmt.Errorf("missing FGB or header")
 	}
@@ -93,7 +93,7 @@ func WithVertexCompanions(data *Fgb, selected map[int]string) (*Fgb, string, err
 	return result, marker, nil
 }
 
-func prepareFeatureCompanion(feature *Feature, fallback flat.GeometryType, kind string, wanted bool, index int) (*geometry, *geometry, error) {
+func prepareFeatureCompanion(feature *Feature, fallback flat.GeometryType, kind VertexKind, wanted bool, index int) (*geometry, *geometry, error) {
 	g, err := readGeometry(feature.Raw.Geometry(&flat.Geometry{}), fallback)
 	if err != nil {
 		return nil, nil, fmt.Errorf("feature %d: %w", index+1, err)
@@ -119,9 +119,9 @@ func prepareFeatureCompanion(feature *Feature, fallback flat.GeometryType, kind 
 	return g, vertices, nil
 }
 
-func validateVertexSelection(typ flat.GeometryType, kind string) error {
-	valid := kind == "LineString" && (typ == flat.GeometryTypeLineString || typ == flat.GeometryTypeMultiLineString) ||
-		kind == "Polygon" && (typ == flat.GeometryTypePolygon || typ == flat.GeometryTypeMultiPolygon)
+func validateVertexSelection(typ flat.GeometryType, kind VertexKind) error {
+	valid := kind == VertexLineString && (typ == flat.GeometryTypeLineString || typ == flat.GeometryTypeMultiLineString) ||
+		kind == VertexPolygon && (typ == flat.GeometryTypePolygon || typ == flat.GeometryTypeMultiPolygon)
 	if !valid {
 		return fmt.Errorf("invalid vertex selection %q for %s", kind, typ)
 	}
@@ -144,25 +144,25 @@ func resolveMarkerColumn(feature *flat.Feature, header *flat.Header) (flatgeobuf
 	return localSchema, markerIndex, nil
 }
 
-func encodeMarkerPayload(payload []byte, markerIndex int, kind string) []byte {
+func encodeMarkerPayload(payload []byte, markerIndex int, kind VertexKind) []byte {
 	// Retain the original sparse property bytes exactly, including JSON,
 	// binary, and integer payloads. Only the new marker entry is appended.
 	properties := append([]byte(nil), payload...)
 	properties = binary.LittleEndian.AppendUint16(properties, uint16(markerIndex))
 	properties = binary.LittleEndian.AppendUint32(properties, uint32(len(kind)))
-	properties = append(properties, kind...)
+	properties = append(properties, string(kind)...)
 
 	return properties
 }
 
-func buildCompanionFeature(feature Feature, vertices *geometry, schema flatgeobuf.Schema, markerIndex int, marker, kind string) Feature {
+func buildCompanionFeature(feature Feature, vertices *geometry, schema flatgeobuf.Schema, markerIndex int, marker string, kind VertexKind) Feature {
 	properties := encodeMarkerPayload(feature.Raw.PropertiesBytes(), markerIndex, kind)
 	values := maps.Clone(feature.Properties)
 	if values == nil {
 		values = make(map[string]any)
 	}
 
-	values[marker] = kind
+	values[marker] = string(kind)
 
 	return Feature{
 		Raw:        packFeature(vertices, properties, schema, marker),

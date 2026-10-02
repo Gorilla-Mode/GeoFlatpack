@@ -117,8 +117,8 @@ func observeCategoryValue(value any, field *CategoryField, inferred map[string]b
 		return
 	}
 
-	inferred[category.kind] = true
-	seen[category.kind+":"+category.value] = category.String()
+	inferred[string(category.kind)] = true
+	seen[string(category.kind)+":"+category.value] = category.String()
 }
 
 func recordColumnType(schema flatgeobuf.Schema, index int, types map[string]map[string]bool, unavailable map[string]string) {

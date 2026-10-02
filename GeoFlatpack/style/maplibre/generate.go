@@ -33,7 +33,7 @@ func NewMapLibreStyle(filename, sourceName string, backgroundPaint style.Hex) (*
 		Layers: []StyleLayer{
 			{
 				ID:    "background",
-				Type:  "background",
+				Type:  RenderBackground,
 				Paint: Paint{"background-color": backgroundPaint},
 			},
 		},
@@ -101,7 +101,7 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle, catalogs
 
 				hasLine := false
 				for _, layerStyle := range stack {
-					if layerStyle.Type == "line" {
+					if layerStyle.Type == RenderLine {
 						hasLine = true
 					}
 				}
@@ -112,7 +112,7 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle, catalogs
 						return nil, err
 					}
 
-					if layerStyle.Type == "symbol" {
+					if layerStyle.Type == RenderSymbol {
 						selectedIcons[layerStyle.IconName] = icons[layerStyle.IconName].Svg
 					}
 
@@ -159,7 +159,7 @@ func resolveGroupStack(styles map[StyleGroup][]RenderLayerStyle, group StyleGrou
 }
 
 func buildRenderLayer(input LayerStyle, group StyleGroup, id string, index int, layerStyle RenderLayerStyle, hasLine bool, icons map[string]svg.Svg) (StyleLayer, error) {
-	if layerStyle.Type != "symbol" && !slices.Contains(RenderTypes[group.GeometryType], layerStyle.Type) {
+	if layerStyle.Type != RenderSymbol && !slices.Contains(RenderTypes[group.GeometryType], layerStyle.Type) {
 		return StyleLayer{}, fmt.Errorf("group %q: unsupported render type %q for %s", id, layerStyle.Type, group.GeometryType)
 	}
 
@@ -170,20 +170,20 @@ func buildRenderLayer(input LayerStyle, group StyleGroup, id string, index int, 
 
 	var layer StyleLayer
 	switch layerStyle.Type {
-	case "symbol":
+	case RenderSymbol:
 		var err error
 		layer, err = buildSymbolLayer(input, group, id, layerID, layerStyle, icons)
 		if err != nil {
 			return StyleLayer{}, err
 		}
 
-	case "circle":
+	case RenderCircle:
 		layer = PointLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
 
-	case "line":
+	case RenderLine:
 		layer = LineLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
 
-	case "fill":
+	case RenderFill:
 		layer = PolygonLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
 		if _, explicit := layerStyle.Paint["fill-outline-color"]; hasLine && !explicit {
 			layer.Paint["fill-outline-color"] = "transparent"
@@ -206,7 +206,7 @@ func buildSymbolLayer(input LayerStyle, group StyleGroup, id, layerID string, la
 
 	pointGroup := group
 	pointGroup.GeometryType = Point
-	layer := newLayer("symbol", layerID, input.SourceID, input.CategoryField, pointGroup, Paint{}, layerStyle.Paint)
+	layer := newLayer(RenderSymbol, layerID, input.SourceID, input.CategoryField, pointGroup, Paint{}, layerStyle.Paint)
 	layer.Layout = buildSymbolLayout(layerStyle)
 
 	return layer, nil
@@ -221,7 +221,7 @@ func buildSymbolLayout(layerStyle RenderLayerStyle) map[string]any {
 	return layout
 }
 
-func buildVertexFilter(filter []any, geometry GeometryType, renderType, marker string) []any {
+func buildVertexFilter(filter []any, geometry GeometryType, renderType RenderType, marker string) []any {
 	if marker == "" {
 		return filter
 	}
@@ -230,7 +230,7 @@ func buildVertexFilter(filter []any, geometry GeometryType, renderType, marker s
 		return []any{"all", filter, []any{"!", []any{"has", marker}}}
 	}
 
-	if renderType == "symbol" {
+	if renderType == RenderSymbol {
 		return []any{"all", filter, []any{"==", []any{"get", marker}, string(geometry)}}
 	}
 
@@ -238,7 +238,7 @@ func buildVertexFilter(filter []any, geometry GeometryType, renderType, marker s
 }
 
 func placeLayer(layer StyleLayer, base, symbols *[]StyleLayer) {
-	if layer.Type == "symbol" {
+	if layer.Type == RenderSymbol {
 		*symbols = append(*symbols, layer)
 
 		return

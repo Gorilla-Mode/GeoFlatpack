@@ -11,7 +11,8 @@ import (
 )
 
 func newLayer(
-	layerType, id, source, field string,
+	layerType RenderType,
+	id, source, field string,
 	group StyleGroup,
 	defaults, overrides Paint,
 ) StyleLayer {
@@ -34,7 +35,7 @@ func newLayer(
 }
 
 func PointLayer(id, source, field string, group StyleGroup, paint Paint) StyleLayer {
-	return newLayer("circle", id, source, field, group, Paint{
+	return newLayer(RenderCircle, id, source, field, group, Paint{
 		"circle-color":        "#f59e0b",
 		"circle-radius":       6,
 		"circle-stroke-color": "#78350f",
@@ -43,14 +44,14 @@ func PointLayer(id, source, field string, group StyleGroup, paint Paint) StyleLa
 }
 
 func LineLayer(id, source, field string, group StyleGroup, paint Paint) StyleLayer {
-	return newLayer("line", id, source, field, group, Paint{
+	return newLayer(RenderLine, id, source, field, group, Paint{
 		"line-color": "#dc2626",
 		"line-width": 3,
 	}, paint)
 }
 
 func PolygonLayer(id, source, field string, group StyleGroup, paint Paint) StyleLayer {
-	return newLayer("fill", id, source, field, group, Paint{
+	return newLayer(RenderFill, id, source, field, group, Paint{
 		"fill-color":         "#2563eb",
 		"fill-opacity":       0.55,
 		"fill-outline-color": "#1e3a8a",

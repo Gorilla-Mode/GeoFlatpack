@@ -9,15 +9,55 @@ const (
 	Polygon GeometryType = "Polygon"
 )
 
+type RenderType string
+
+const (
+	RenderBackground RenderType = "background"
+	RenderFill       RenderType = "fill"
+	RenderLine       RenderType = "line"
+	RenderCircle     RenderType = "circle"
+	RenderSymbol     RenderType = "symbol"
+)
+
+type categoryKind string
+
+const (
+	categoryAll     categoryKind = ""
+	categoryMissing categoryKind = "missing"
+	categoryString  categoryKind = "string"
+	categoryBoolean categoryKind = "boolean"
+	categoryNumber  categoryKind = "number"
+)
+
+type PropertyType string
+
+const (
+	ColorType      PropertyType = "color"
+	StringType     PropertyType = "string"
+	EnumType       PropertyType = "enum"
+	BooleanType    PropertyType = "boolean"
+	NumberType     PropertyType = "number"
+	ArrayType      PropertyType = "array"
+	ReferenceType  PropertyType = "reference"
+	TransitionType PropertyType = "transition"
+)
+
+type StyleSection string
+
+const (
+	PaintSection  StyleSection = "paint"
+	LayoutSection StyleSection = "layout"
+)
+
 // The first render type is the default for an unconfigured geometry group.
-var RenderTypes = map[GeometryType][]string{
-	Polygon: {"fill", "line", "circle"},
-	Line:    {"line"},
-	Point:   {"circle"},
+var RenderTypes = map[GeometryType][]RenderType{
+	Polygon: {RenderFill, RenderLine, RenderCircle},
+	Line:    {RenderLine},
+	Point:   {RenderCircle},
 }
 
 type RenderLayerStyle struct {
-	Type     string
+	Type     RenderType
 	Paint    Paint
 	Layout   map[string]any
 	IconName string
@@ -30,7 +70,7 @@ type StyleGroup struct {
 
 type StyleLayer struct {
 	ID     string         `json:"id"`
-	Type   string         `json:"type"`
+	Type   RenderType     `json:"type"`
 	Source string         `json:"source,omitempty"`
 	Filter []any          `json:"filter,omitempty"`
 	Paint  Paint          `json:"paint,omitempty"`

@@ -15,7 +15,7 @@ func PrepareVertexCompanions(input *LayerStyle) (*fgb.Fgb, error) {
 		return nil, fmt.Errorf("missing styling input, FGB, or header")
 	}
 
-	selected := make(map[int]string)
+	selected := make(map[int]fgb.VertexKind)
 	for i := range input.Data.Features {
 		group, eligible, err := vertexStyleGroup(&input.Data.Features[i], input.Data.Header.GeometryType(), input.CategoryField, i)
 		if err != nil {
@@ -27,8 +27,14 @@ func PrepareVertexCompanions(input *LayerStyle) (*fgb.Fgb, error) {
 		}
 
 		for _, layer := range input.Styles[group] {
-			if layer.Type == "symbol" {
-				selected[i] = string(group.GeometryType)
+			if layer.Type == RenderSymbol {
+				switch group.GeometryType {
+				case Line:
+					selected[i] = fgb.VertexLineString
+				case Polygon:
+					selected[i] = fgb.VertexPolygon
+				}
+
 				break
 			}
 		}

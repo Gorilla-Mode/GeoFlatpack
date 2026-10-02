@@ -10,7 +10,7 @@ import (
 var specJSON []byte
 
 type PropertySpec struct {
-	Type       string                     `json:"type"`
+	Type       PropertyType               `json:"type"`
 	Doc        string                     `json:"doc"`
 	Default    json.RawMessage            `json:"default"`
 	Minimum    *float64                   `json:"minimum"`
@@ -29,8 +29,8 @@ func LoadSpec() (Spec, error) {
 	return spec, err
 }
 
-func (s Spec) Properties(layerType, section string) (map[string]PropertySpec, error) {
-	key := section + "_" + layerType
+func (s Spec) Properties(layerType RenderType, section StyleSection) (map[string]PropertySpec, error) {
+	key := string(section) + "_" + string(layerType)
 	data, ok := s[key]
 
 	if !ok {
@@ -43,7 +43,7 @@ func (s Spec) Properties(layerType, section string) (map[string]PropertySpec, er
 	}
 
 	// Transition properties are described through a flag in the reference.
-	if section == "paint" {
+	if section == PaintSection {
 		extra := make(map[string]PropertySpec)
 		for name, property := range properties {
 			addTransitionProperty(extra, name, property)
@@ -63,7 +63,7 @@ func addTransitionProperty(properties map[string]PropertySpec, name string, prop
 	}
 
 	properties[name+"-transition"] = PropertySpec{
-		Type: "transition",
+		Type: TransitionType,
 		Doc:  `JSON object, for example {"duration":300,"delay":0}`,
 	}
 }

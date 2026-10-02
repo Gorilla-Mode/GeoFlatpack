@@ -47,6 +47,11 @@ type StyleOptions struct {
 	WriteFGB bool
 }
 
+type renderChoice struct {
+	typeValue maplibre.RenderType
+	label     string
+}
+
 func PromptStyles(
 	groups []maplibre.StyleGroup,
 	scanner *bufio.Scanner,
@@ -71,14 +76,18 @@ func PromptStyles(
 	}
 
 	for _, group := range groups {
-		types := append([]string(nil), maplibre.RenderTypes[group.GeometryType]...)
+		types := make([]renderChoice, 0, len(maplibre.RenderTypes[group.GeometryType])+1)
+		for _, renderType := range maplibre.RenderTypes[group.GeometryType] {
+			types = append(types, renderChoice{typeValue: renderType, label: string(renderType)})
+		}
+
 		if len(types) == 0 {
 			return nil, fmt.Errorf("unsupported geometry: %s", group.GeometryType)
 		}
 
 		if len(opts.Icons) > 0 {
 			if group.GeometryType == maplibre.Point || opts.WriteFGB {
-				types = append(types, "SVG icon")
+				types = append(types, renderChoice{typeValue: maplibre.RenderSymbol, label: "SVG icon"})
 			} else if _, err := fmt.Fprintln(out, "SVG icons for lines and polygons require writing companion geometry; enable --write-fgb to use them."); err != nil {
 				return nil, err
 			}
@@ -88,10 +97,10 @@ func PromptStyles(
 			stack := make([]string, 0, len(styles[group]))
 			var symbols []string
 			for _, layer := range styles[group] {
-				if layer.Type == "symbol" {
+				if layer.Type == maplibre.RenderSymbol {
 					symbols = append(symbols, fmt.Sprintf("SVG icon (%s)", layer.IconName))
 				} else {
-					stack = append(stack, layer.Type)
+					stack = append(stack, string(layer.Type))
 				}
 			}
 			stack = append(stack, symbols...)
@@ -103,7 +112,7 @@ func PromptStyles(
 			}
 
 			for i, layerType := range types {
-				if _, err := fmt.Fprintf(out, "%d. %s\n", i+1, layerType); err != nil {
+				if _, err := fmt.Fprintf(out, "%d. %s\n", i+1, layerType.label); err != nil {
 					return nil, err
 				}
 			}
@@ -125,10 +134,10 @@ func PromptStyles(
 				continue
 			}
 
-			layerType := ""
+			var layerType maplibre.RenderType
 			for i, candidate := range types {
-				if choice == candidate || choice == strconv.Itoa(i+1) {
-					layerType = candidate
+				if choice == candidate.label || choice == strconv.Itoa(i+1) {
+					layerType = candidate.typeValue
 					break
 				}
 			}
@@ -141,8 +150,7 @@ func PromptStyles(
 			}
 
 			layer := maplibre.RenderLayerStyle{Type: layerType}
-			if layerType == "SVG icon" {
-				layer.Type = "symbol"
+			if layerType == maplibre.RenderSymbol {
 				layer.IconName, layer.Layout, err = promptIcon(opts.Icons, scanner, out)
 				if err != nil {
 					return nil, err
@@ -161,8 +169,8 @@ func PromptStyles(
 	return styles, nil
 }
 
-func promptPaint(spec maplibre.Spec, layerType string, scanner *bufio.Scanner, out io.Writer) (maplibre.Paint, error) {
-	properties, err := spec.Properties(layerType, "paint")
+func promptPaint(spec maplibre.Spec, layerType maplibre.RenderType, scanner *bufio.Scanner, out io.Writer) (maplibre.Paint, error) {
+	properties, err := spec.Properties(layerType, maplibre.PaintSection)
 	if err != nil {
 		return nil, err
 	}

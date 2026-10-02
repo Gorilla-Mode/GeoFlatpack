@@ -11,18 +11,18 @@ import (
 // CategoryValue is comparable so it can be used as part of a StyleGroup key.
 // Its display label is separate from its typed MapLibre filter value.
 type CategoryValue struct {
-	kind  string
+	kind  categoryKind
 	value string
 }
 
 func NewCategoryValue(value any) (CategoryValue, error) {
 	switch v := value.(type) {
 	case nil:
-		return CategoryValue{kind: "missing"}, nil
+		return CategoryValue{kind: categoryMissing}, nil
 	case string:
-		return CategoryValue{kind: "string", value: v}, nil
+		return CategoryValue{kind: categoryString, value: v}, nil
 	case bool:
-		return CategoryValue{kind: "boolean", value: strconv.FormatBool(v)}, nil
+		return CategoryValue{kind: categoryBoolean, value: strconv.FormatBool(v)}, nil
 	}
 
 	return numericCategoryValue(value)
@@ -53,16 +53,16 @@ func numericCategoryValue(value any) (CategoryValue, error) {
 		return CategoryValue{}, fmt.Errorf("complex or binary values (%T) cannot be styling categories", value)
 	}
 
-	return CategoryValue{kind: "number", value: number}, nil
+	return CategoryValue{kind: categoryNumber, value: number}, nil
 }
 
 func (c CategoryValue) String() string {
 	switch c.kind {
-	case "":
+	case categoryAll:
 		return "All features"
-	case "missing":
+	case categoryMissing:
 		return "Missing value"
-	case "string":
+	case categoryString:
 		return strconv.Quote(c.value)
 	default:
 		return c.value
@@ -71,11 +71,11 @@ func (c CategoryValue) String() string {
 
 func (c CategoryValue) FilterValue() any {
 	switch c.kind {
-	case "string":
+	case categoryString:
 		return c.value
-	case "number":
+	case categoryNumber:
 		return json.Number(c.value)
-	case "boolean":
+	case categoryBoolean:
 		return c.value == "true"
 	default:
 		return nil
