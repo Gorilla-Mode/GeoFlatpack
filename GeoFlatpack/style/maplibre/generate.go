@@ -3,8 +3,10 @@ package maplibre
 import (
 	"GeoFlatpack/fgb"
 	"GeoFlatpack/style"
+	"GeoFlatpack/style/maplibre/svg"
 	"fmt"
 	"image/color"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -45,15 +47,23 @@ type LayerStyle struct {
 	SourceID      string
 	CategoryField string
 	Styles        map[StyleGroup][]RenderLayerStyle
+	VertexMarker  string
 }
 
 // BuildMapLibreCollectionStyle draws polygons, lines, then points, retaining
-// input order within each geometry type. Empty inputs still contribute sources.
-func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle) (*StyleHeader, error) {
+// input order within each geometry type, then appends SVG symbols in prompting
+// order (input, group, selection). Empty inputs still contribute sources.
+func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle, catalogs ...map[string]svg.Svg) (*StyleHeader, error) {
 	backgroundPaint := style.ToHex(color.RGBA{R: 30, G: 30, B: 30, A: 255})
 	mapStyle, _ := NewMapLibreStyle(filename, "", backgroundPaint)
 	mapStyle.Sources = make(map[string]map[string]any, len(inputs))
 	groups := make([][]StyleGroup, len(inputs))
+	var icons map[string]svg.Svg
+	if len(catalogs) > 0 {
+		icons = catalogs[0]
+	}
+	selectedIcons := make(map[string]string)
+	symbols := make([][]StyleLayer, len(inputs))
 
 	for i, input := range inputs {
 		if input.SourceID == "" {
@@ -96,7 +106,7 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle) (*StyleH
 					return style.Type == "line"
 				})
 				for k, layerStyle := range stack {
-					if !slices.Contains(RenderTypes[geometry], layerStyle.Type) {
+					if layerStyle.Type != "symbol" && !slices.Contains(RenderTypes[geometry], layerStyle.Type) {
 						return nil, fmt.Errorf("group %q: unsupported render type %q for %s", id, layerStyle.Type, geometry)
 					}
 					layerID := id
@@ -106,6 +116,25 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle) (*StyleH
 					var layer StyleLayer
 
 					switch layerStyle.Type {
+					case "symbol":
+						icon, exists := icons[layerStyle.IconName]
+						if !exists {
+							return nil, fmt.Errorf("group %q: unknown SVG icon %q", id, layerStyle.IconName)
+						}
+						if geometry != Point && input.VertexMarker == "" {
+							return nil, fmt.Errorf("group %q: SVG icons require stored vertex companions", id)
+						}
+						pointGroup := group
+						pointGroup.GeometryType = Point
+						layer = newLayer("symbol", layerID, input.SourceID, input.CategoryField, pointGroup, Paint{}, layerStyle.Paint)
+						layer.Layout = map[string]any{"icon-size": 0.5, "icon-allow-overlap": true}
+						maps.Copy(layer.Layout, layerStyle.Layout)
+						layer.Layout["icon-image"] = layerStyle.IconName
+						layer.Layout["symbol-placement"] = "point"
+						if geometry != Point {
+							layer.Filter = []any{"all", layer.Filter, []any{"==", []any{"get", input.VertexMarker}, string(geometry)}}
+						}
+						selectedIcons[layerStyle.IconName] = icon.Svg
 					case "circle":
 						layer = PointLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
 					case "line":
@@ -118,10 +147,23 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle) (*StyleH
 						}
 					}
 
-					mapStyle.Layers = append(mapStyle.Layers, layer)
+					if geometry == Point && input.VertexMarker != "" {
+						layer.Filter = []any{"all", layer.Filter, []any{"!", []any{"has", input.VertexMarker}}}
+					}
+					if layerStyle.Type == "symbol" {
+						symbols[i] = append(symbols[i], layer)
+					} else {
+						mapStyle.Layers = append(mapStyle.Layers, layer)
+					}
 				}
 			}
 		}
+	}
+	for _, stack := range symbols {
+		mapStyle.Layers = append(mapStyle.Layers, stack...)
+	}
+	if len(selectedIcons) > 0 {
+		mapStyle.Metadata = map[string]any{"geoflatpack:icons": selectedIcons}
 	}
 	return mapStyle, nil
 }
