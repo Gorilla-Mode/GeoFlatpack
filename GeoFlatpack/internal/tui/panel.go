@@ -20,7 +20,7 @@ type panelLayout struct {
 	header        string
 	heading       string
 	gap           int
-	footerRows    int
+	footerGap     int
 	footerHeight  int
 	bodyHeight    int
 	contentWidth  int
@@ -37,10 +37,10 @@ func (m Model) layout() panelLayout {
 	}
 
 	l := panelLayout{
-		frame:      frame,
-		width:      max(1, m.width-frame.GetHorizontalFrameSize()),
-		height:     max(1, m.height-frame.GetVerticalFrameSize()),
-		footerRows: 1,
+		frame: frame,
+		width: max(1, m.width-frame.GetHorizontalFrameSize()),
+		// The footer uses the bottom padding row, as with the original + 1.
+		height: max(1, m.height-frame.GetVerticalFrameSize()+min(1, frame.GetPaddingBottom())),
 	}
 
 	// Both boxes use the same outline. Drop padding, then borders, before
@@ -52,11 +52,7 @@ func (m Model) layout() panelLayout {
 		}
 	}
 
-	if l.height >= 6 {
-		l.footerRows = 2
-	}
-
-	l.footerHeight = l.footerRows + l.box.GetVerticalFrameSize()
+	l.footerHeight = 1 + l.box.GetVerticalFrameSize()
 	if l.height >= 2 {
 		l.header = m.styles.title.Render(ansi.Truncate("GeoFlatpack", l.width, ""))
 	}
@@ -64,13 +60,18 @@ func (m Model) layout() panelLayout {
 	if l.height >= 12 {
 		l.gap = 1
 	}
+	l.footerGap = l.gap
+	if !m.help.ShowAll && m.screen != scaffoldScreen && l.box.GetVerticalFrameSize() > 0 {
+		l.gap = 0
+		l.footerGap = 0
+	}
 
 	headerHeight := 0
 	if l.header != "" {
 		headerHeight = 1
 	}
 
-	l.bodyHeight = max(0, l.height-headerHeight-l.footerHeight-2*l.gap)
+	l.bodyHeight = max(0, l.height-headerHeight-l.footerHeight-l.gap-l.footerGap)
 	if m.help.ShowAll || m.screen != scaffoldScreen {
 		l.bodyStyle = l.box
 	}
@@ -130,7 +131,7 @@ func (m Model) panel() string {
 		}
 
 		sections = append(sections, l.bodyStyle.Width(l.width).Height(l.bodyHeight).Render(strings.Join(body, "\n")))
-		if l.gap > 0 {
+		if l.footerGap > 0 {
 			sections = append(sections, "")
 		}
 	}
@@ -138,7 +139,7 @@ func (m Model) panel() string {
 	sections = append(sections, l.box.Width(l.width).Height(l.footerHeight).Render(m.footer(l)))
 
 	// Lip Gloss v2 dimensions include both padding and borders.
-	return l.frame.Width(m.width).Height(m.height).Render(strings.Join(sections, "\n"))
+	return l.frame.PaddingBottom(0).Width(m.width).Height(m.height).Render(strings.Join(sections, "\n"))
 }
 
 func (m Model) body(width int) string {
@@ -190,8 +191,9 @@ func (m Model) body(width int) string {
 	switch m.screen {
 	case completionScreen:
 		parts = append(parts, "", m.styles.title.Render("↵ Continue"))
-	default:
-		panic("unhandled default case")
+	case loadingScreen:
+	case scaffoldScreen:
+	case failureScreen:
 	}
 	return strings.Join(parts, "\n")
 }
@@ -214,45 +216,40 @@ func (m Model) expandedHelp() string {
 }
 
 func (m Model) footer(l panelLayout) string {
-	h := m.keys.Select.Help()
-	selectHint := m.help.Styles.ShortKey.Render(h.Key) + " " + m.help.Styles.ShortDesc.Render(h.Desc)
-	// Select has its own row. Clip only when even the compact terminal cannot
-	// physically fit the label; the help bubble never gets to truncate it.
 	footerWidth := max(1, l.width-l.box.GetHorizontalFrameSize())
-	selectHint = ansi.Truncate(selectHint, footerWidth, "")
-	if l.footerRows == 1 {
-		return selectHint
+	helper := m.help
+	helper.SetWidth(0)
+	primary := []key.Binding{m.keys.Help, m.keys.Quit, m.keys.Select}
+	// Keep the normal order, omitting leading hints only when Select cannot fit.
+	for len(primary) > 1 && lipgloss.Width(helper.ShortHelpView(primary)) > footerWidth {
+		primary = primary[1:]
 	}
-
-	var hints []key.Binding
-	for _, binding := range m.keys.ShortHelp() {
-		if binding.Help() != m.keys.Select.Help() {
-			hints = append(hints, binding)
-		}
+	primaryWidth := lipgloss.Width(helper.ShortHelpView(primary))
+	if primaryWidth > footerWidth {
+		return ansi.Truncate(helper.ShortHelpView(primary), footerWidth, "")
 	}
+	hints := append(primary, m.keys.ShortHelp()[3:]...)
 
 	width := footerWidth
 	var scrollHint string
 	if m.viewport.TotalLineCount() > m.viewport.Height() {
 		scrollHint = "↑/↓ PgUp/PgDn Scroll"
-		if lipgloss.Width(scrollHint) > width {
+		if primaryWidth+3+lipgloss.Width(scrollHint) > width {
 			scrollHint = "↑↓ Scroll"
 		}
-		scrollHint = ansi.Truncate(m.styles.muted.Render(scrollHint), width, "")
-		width -= lipgloss.Width(scrollHint) + 3
+		if primaryWidth+3+lipgloss.Width(scrollHint) <= width {
+			scrollHint = m.styles.muted.Render(scrollHint)
+			width -= lipgloss.Width(scrollHint) + 3
+		} else {
+			scrollHint = ""
+		}
 	}
 
-	helper := m.help
-	helper.SetWidth(max(1, width))
-	otherHints := ""
-
-	if width > 0 {
-		otherHints = helper.ShortHelpView(hints)
-	}
-
+	helper.SetWidth(width)
+	otherHints := helper.ShortHelpView(hints)
 	if scrollHint != "" && otherHints != "" {
 		scrollHint += " • "
 	}
 
-	return ansi.Truncate(scrollHint+otherHints, footerWidth, "") + "\n" + selectHint
+	return ansi.Truncate(scrollHint+otherHints, footerWidth, "")
 }
