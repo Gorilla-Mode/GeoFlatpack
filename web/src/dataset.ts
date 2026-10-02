@@ -4,7 +4,7 @@ import { deserialize } from 'flatgeobuf/lib/mjs/geojson.js';
 import type { HeaderMeta } from 'flatgeobuf/lib/mjs/header-meta.js';
 import { Header } from 'flatgeobuf/lib/mjs/flat-geobuf/header.js';
 import { ByteBuffer } from 'flatbuffers';
-import type { FeatureCollection, Geometry, MultiPoint, Position } from 'geojson';
+import type { FeatureCollection, Geometry } from 'geojson';
 
 export type DatasetHeader = HeaderMeta & { name: string | null; hasZ: boolean };
 
@@ -34,33 +34,6 @@ export type SourceLayer = {
 
 export function getErrorMessage(cause: unknown, fallback?: string): string {
   return cause instanceof Error ? cause.message : fallback ?? String(cause);
-}
-
-export function getPolygonVertices(data: FeatureCollection): FeatureCollection<MultiPoint> {
-  function ringVertices(ring: Position[]): Position[] {
-    const first = ring[0];
-    const last = ring[ring.length - 1];
-    // Polygon rings repeat their first coordinate at the end.
-    return ring.length > 1 && first[0] === last[0] && first[1] === last[1] ? ring.slice(0, -1) : ring;
-  }
-  function vertices(geometry: Geometry | null): Position[] {
-    if (geometry?.type === 'Polygon') return geometry.coordinates.flatMap(ringVertices);
-    if (geometry?.type === 'MultiPolygon') return geometry.coordinates.flatMap(polygon => polygon.flatMap(ringVertices));
-    if (geometry?.type === 'GeometryCollection') return geometry.geometries.flatMap(vertices);
-    return [];
-  }
-  return {
-    type: 'FeatureCollection',
-    features: data.features.flatMap((feature, index) => {
-      const coordinates = vertices(feature.geometry);
-      return coordinates.length ? [{
-        type: 'Feature' as const,
-        id: index,
-        properties: feature.properties,
-        geometry: { type: 'MultiPoint' as const, coordinates },
-      }] : [];
-    }),
-  };
 }
 
 export function getBounds(data: FeatureCollection): [[number, number], [number, number]] | null {

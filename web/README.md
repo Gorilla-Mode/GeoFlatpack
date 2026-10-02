@@ -36,9 +36,11 @@ See the [sample stylesheet](../test_data/sample-obstacles.maplibre.json) for a c
 
 - Store inline SVG strings by name in the stylesheet's `metadata["geoflatpack:icons"]`.
 - Reference a name with a symbol layer's `layout["icon-image"]`, such as `"star"`. Use `icon-size` to scale it.
-- For polygon vertices, set the symbol layer's `metadata["geoflatpack:placement"]` to `"vertices"` and `symbol-placement` to `"point"`. Its filters see Point geometry with the original properties; fills, outlines, and popups retain the original feature.
+- For polygon or line vertices, prepare MultiPoint companion features in the FGB before loading, copying the original attributes and assigning distinct feature IDs. Omit the polygon ring's repeated closing coordinate. Use `symbol-placement: "point"` and filter on Point geometry and the appropriate properties; MapLibre's Point filter also matches MultiPoint features.
 
-These metadata keys are GeoFlatpack extensions. The loader supports inline SVGs and literal icon names, not external paths, sprite atlases, or expression-based icon lookup. Failed icons report an error while geometry and valid icons remain visible.
+The `geoflatpack:icons` metadata key is a GeoFlatpack extension. The loader supports inline SVGs and literal icon names, not external paths, sprite atlases, or expression-based icon lookup. Failed icons report an error while geometry and valid icons remain visible.
+
+The sample stores four building corners and three power-line vertices alongside the original polygon, line, and street-light point. All features render from the decoded FGB source, so popups use the stored properties and inspectors include the MultiPoint companions. The browser does not generate vertex geometry. These companions are manually prepared; automatic, style-driven generation is deferred to a future CLI change.
 
 
 ## Usage
@@ -60,7 +62,7 @@ import type { LayerSpecification, StyleSpecification } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { deserialize } from 'flatgeobuf/lib/mjs/geojson.js';
-import type { FeatureCollection, Geometry, MultiPoint, Position } from 'geojson';
+import type { FeatureCollection } from 'geojson';
 import fgbUrl from '../../test_data/sample-obstacles.fgb?url';
 import styleJson from '../../test_data/sample-obstacles.maplibre.json';
 
@@ -132,23 +134,11 @@ async function loadIcons(): Promise<Map<string, string | null>> {
 }
 ```
 
-### 4. Add the sources and styled layers
+### 4. Add the source and styled layers
 
-The sample places stars at polygon vertices. Build a MultiPoint source for those symbols, keeping feature properties and omitting each ring's repeated closing coordinate. Their filters see Point geometry; fills and outlines use the original source.
+The sample FGB already contains the MultiPoint features used for building and power-line stars. Add every decoded feature to one source; the stylesheet's geometry and `kind` filters select the features for each layer. Fill and line layers precede their corresponding star layers.
 
 ```ts
-function polygonVertices(geometry: Geometry | null): Position[] {
-  if (geometry?.type === 'MultiPolygon') {
-    return geometry.coordinates.flatMap(coordinates => polygonVertices({ type: 'Polygon', coordinates }));
-  }
-  if (geometry?.type === 'GeometryCollection') return geometry.geometries.flatMap(polygonVertices);
-  if (geometry?.type !== 'Polygon') return [];
-  return geometry.coordinates.flatMap(ring => {
-    const first = ring[0], last = ring[ring.length - 1];
-    return ring.length > 1 && first[0] === last[0] && first[1] === last[1] ? ring.slice(0, -1) : ring;
-  });
-}
-
 async function addOverlay() {
   const data = await loadData();
   const icons = await loadIcons();
@@ -156,28 +146,10 @@ async function addOverlay() {
   if (!source || source.type !== 'geojson') throw new Error('Expected a matching GeoJSON source.');
   map.addSource(sourceId, { ...source, data });
 
-  const vertexSourceId = `${sourceId}-vertices`;
-  const vertices: FeatureCollection<MultiPoint> = {
-    type: 'FeatureCollection',
-    features: data.features.flatMap((feature, index) => {
-      const coordinates = polygonVertices(feature.geometry);
-      return coordinates.length ? [{
-        type: 'Feature' as const, id: index, properties: feature.properties,
-        geometry: { type: 'MultiPoint' as const, coordinates },
-      }] : [];
-    }),
-  };
-  map.addSource(vertexSourceId, { type: 'geojson', data: vertices });
-
   for (const layer of stylesheet.layers) {
     if (!('source' in layer) || layer.source !== sourceId) continue;
     let rendered: LayerSpecification = { ...layer, id: `${sourceId}-${layer.id}` };
     if (rendered.type === 'symbol') {
-      const metadata = rendered.metadata;
-      if (metadata && typeof metadata === 'object' && 'geoflatpack:placement' in metadata &&
-        metadata['geoflatpack:placement'] === 'vertices') {
-        rendered = { ...rendered, source: vertexSourceId };
-      }
       const layout = { ...rendered.layout };
       const name = layout['icon-image'];
       if (typeof name === 'string' && icons.has(name)) {
@@ -192,7 +164,7 @@ async function addOverlay() {
 }
 ```
 
-Layer order follows the stylesheet; backgrounds and other sources are skipped. SVG metadata and vertex placement are GeoFlatpack conventions implemented by this code, not built-in MapLibre behavior.
+Layer order follows the stylesheet; backgrounds and other sources are skipped. SVG metadata is a GeoFlatpack convention implemented by this code. Vertex positions come directly from the stored MultiPoint features.
 
 For the full implementation—including validation, cancellation, cleanup, multiple datasets, and popups—see [App.tsx](src/App.tsx), [dataset.ts](src/dataset.ts), [styleIcons.ts](src/styleIcons.ts), and [mapLayers.ts](src/mapLayers.ts).
 

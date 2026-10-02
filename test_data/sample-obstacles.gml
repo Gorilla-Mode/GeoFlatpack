@@ -42,4 +42,47 @@
       <ogr:height_m>18</ogr:height_m>
     </ogr:Obstacle>
   </gml:featureMember>
+  <gml:featureMember>
+    <ogr:Obstacle fid="Obstacle.4">
+      <ogr:geometryProperty>
+        <gml:MultiPoint srsName="EPSG:4326">
+          <gml:pointMember>
+            <gml:Point><gml:coordinates>10.7510,59.9115</gml:coordinates></gml:Point>
+          </gml:pointMember>
+          <gml:pointMember>
+            <gml:Point><gml:coordinates>10.7518,59.9115</gml:coordinates></gml:Point>
+          </gml:pointMember>
+          <gml:pointMember>
+            <gml:Point><gml:coordinates>10.7518,59.9120</gml:coordinates></gml:Point>
+          </gml:pointMember>
+          <gml:pointMember>
+            <gml:Point><gml:coordinates>10.7510,59.9120</gml:coordinates></gml:Point>
+          </gml:pointMember>
+        </gml:MultiPoint>
+      </ogr:geometryProperty>
+      <ogr:kind>building</ogr:kind>
+      <ogr:name>Office block</ogr:name>
+      <ogr:height_m>18</ogr:height_m>
+    </ogr:Obstacle>
+  </gml:featureMember>
+  <gml:featureMember>
+    <ogr:Obstacle fid="Obstacle.5">
+      <ogr:geometryProperty>
+        <gml:MultiPoint srsName="EPSG:4326">
+          <gml:pointMember>
+            <gml:Point><gml:coordinates>10.7480,59.9132</gml:coordinates></gml:Point>
+          </gml:pointMember>
+          <gml:pointMember>
+            <gml:Point><gml:coordinates>10.7490,59.9134</gml:coordinates></gml:Point>
+          </gml:pointMember>
+          <gml:pointMember>
+            <gml:Point><gml:coordinates>10.7502,59.9129</gml:coordinates></gml:Point>
+          </gml:pointMember>
+        </gml:MultiPoint>
+      </ogr:geometryProperty>
+      <ogr:kind>power_line</ogr:kind>
+      <ogr:name>Overhead cable</ogr:name>
+      <ogr:height_m>15</ogr:height_m>
+    </ogr:Obstacle>
+  </gml:featureMember>
 </ogr:FeatureCollection>

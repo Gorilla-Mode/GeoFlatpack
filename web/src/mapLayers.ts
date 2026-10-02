@@ -1,7 +1,7 @@
 import { Popup } from 'maplibre-gl';
 import type { Map, MapMouseEvent, StyleSpecification } from 'maplibre-gl';
 import type { Feature } from 'geojson';
-import { getErrorMessage, getPolygonVertices, getSourceName } from './dataset';
+import { getErrorMessage, getSourceName } from './dataset';
 import type { Dataset, SourceLayer } from './dataset';
 import { loadEmbeddedIcons } from './styleIcons';
 
@@ -56,7 +56,6 @@ export async function renderMapLayers(map: Map, layers: { layer: LoadedLayer; st
 
   for (const { layer, style, icons } of prepared) {
     const sourceId = `geoflatpack-${layer.id}`;
-    const vertexSourceId = `${sourceId}-vertices`;
     const addedLayers: string[] = [];
     const addedSources: string[] = [];
     const addedImages: string[] = [];
@@ -87,19 +86,6 @@ export async function renderMapLayers(map: Map, layers: { layer: LoadedLayer; st
         const id = `${sourceId}-${styleLayer.id}`;
         let runtimeLayer = { ...styleLayer, id, source: sourceId };
         if (runtimeLayer.type === 'symbol') {
-          const metadata = runtimeLayer.metadata;
-          if (metadata && typeof metadata === 'object' && 'geoflatpack:placement' in metadata &&
-            metadata['geoflatpack:placement'] === 'vertices') {
-            if (!addedSources.includes(vertexSourceId)) {
-              map.addSource(vertexSourceId, { type: 'geojson', data: getPolygonVertices(data) });
-              addedSources.push(vertexSourceId);
-              owners[vertexSourceId] = {
-                layer,
-                findFeature: id => typeof id === 'number' ? data.features[id] : undefined,
-              };
-            }
-            runtimeLayer = { ...runtimeLayer, source: vertexSourceId };
-          }
           const icon = runtimeLayer.layout?.['icon-image'];
           if (typeof icon === 'string' && icons.images.has(icon)) {
             const layout = { ...runtimeLayer.layout };

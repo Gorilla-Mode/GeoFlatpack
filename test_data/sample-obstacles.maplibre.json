@@ -59,9 +59,6 @@
       "id": "buildings-star",
       "type": "symbol",
       "source": "sample-obstacles",
-      "metadata": {
-        "geoflatpack:placement": "vertices"
-      },
       "filter": [
         "all",
         ["==", ["geometry-type"], "Point"],
@@ -86,6 +83,22 @@
       "paint": {
         "line-color": "#dc2626",
         "line-width": 5
+      }
+    },
+    {
+      "id": "power-lines-star",
+      "type": "symbol",
+      "source": "sample-obstacles",
+      "filter": [
+        "all",
+        ["==", ["geometry-type"], "Point"],
+        ["==", ["get", "kind"], "power_line"]
+      ],
+      "layout": {
+        "symbol-placement": "point",
+        "icon-image": "star",
+        "icon-size": 0.5,
+        "icon-allow-overlap": true
       }
     },
     {
