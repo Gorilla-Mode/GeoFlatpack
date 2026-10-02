@@ -19,7 +19,6 @@ GeoFlatpack converts each layer in a `.gml` file into its own FlatGeobuf file an
 
 The `web/` directory contains a browser-based MapLibre example. See the [web README](web/README.md) for setup and app details.
 
-
 ## Usage
 
 ### Compile
@@ -46,6 +45,7 @@ Then run it:
 | `-f`                | Stylesheet format: `maplibre` or `sld`                                      | `maplibre` | No        |
 | `-h`                | Show help                                                                   | `false`    | No        |
 | `-v`                | Verbose output                                                              | `false`    | No        |
+| `--svg-dir`         | Directory of SVG icons available in the styling menu                        | —          | No        |
 | `--write-fgb`       | Write one FlatGeobuf output file per input layer                            | `true`     | No        |
 | `--write-style`     | Prompt per layer and write one shared `.gen.maplibre.json` stylesheet       | `true`     | No        |
 | `--force-epsg:4326` | Reproject coordinates and CRS metadata to EPSG:4326                         | `true`     | No        |
@@ -75,7 +75,7 @@ output files or directories.
 To let GDAL skip feature conversion failures, enable `--skip-failures` (default: `false`). **Skipped failures can produce
 incomplete output.**
 
-```sh
+```zsh
 ./GeoFlatpack -i input.gml -o ./ --skip-failures
 ```
 
@@ -94,6 +94,9 @@ For example, from the `GeoFlatpack/` directory:
 # output/map.Zones.fgb
 # output/map.gen.maplibre.json
 ```
+
+SVGs can be supplied for styling icons. The `--svg-dir` flag points to a directory of SVGs, which are then available in the MapLibre style menu.
+These will then be avaiable to be added to points, lines and polygons.
 
 The stylesheet always uses the **`.gen` tag** and has one source per FGB, with IDs set to the final filenames without `.fgb`.
 Sources are empty GeoJSON placeholders for the consuming application to populate.
@@ -117,4 +120,4 @@ Sources are empty GeoJSON placeholders for the consuming application to populate
 - [x] Cli user input for maplibre stylesheet
 - [x] Layered GML support
 - [ ] Tui user input for maplibre stylesheet
-- [ ] Symbology support
+- [x] Symbology support
