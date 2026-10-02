@@ -25,9 +25,14 @@ func NewCategoryValue(value any) (CategoryValue, error) {
 		return CategoryValue{kind: "boolean", value: strconv.FormatBool(v)}, nil
 	}
 
+	return numericCategoryValue(value)
+}
+
+func numericCategoryValue(value any) (CategoryValue, error) {
 	// FlatGeobuf exposes all signed/unsigned integer and floating point widths.
 	v := reflect.ValueOf(value)
 	var number string
+
 	switch v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		number = strconv.FormatInt(v.Int(), 10)
@@ -38,9 +43,11 @@ func NewCategoryValue(value any) (CategoryValue, error) {
 		if math.IsNaN(f) || math.IsInf(f, 0) {
 			return CategoryValue{}, fmt.Errorf("non-finite numbers cannot be styling categories")
 		}
+
 		if f == 0 { // Normalize negative zero.
 			f = 0
 		}
+
 		number = strconv.FormatFloat(f, 'f', -1, v.Type().Bits())
 	default:
 		return CategoryValue{}, fmt.Errorf("complex or binary values (%T) cannot be styling categories", value)

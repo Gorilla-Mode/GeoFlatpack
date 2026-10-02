@@ -65,35 +65,15 @@ func CollectStyleGroups(fgb *fgb.Fgb, field string) ([]StyleGroup, error) {
 	seen := make(map[StyleGroup]bool)
 
 	for i := range fgb.Features {
-		feature := &fgb.Features[i]
-		geometry := feature.Raw.Geometry(&flat.Geometry{})
-		if geometry == nil {
+		group, present, err := featureStyleGroup(&fgb.Features[i], fgb.Header.GeometryType(), field, i)
+		if err != nil {
+			return nil, err
+		}
+
+		if !present {
 			continue
 		}
 
-		geometryType := geometry.Type()
-		if geometryType == flat.GeometryTypeUnknown {
-			geometryType = fgb.Header.GeometryType()
-		}
-
-		group := StyleGroup{
-			GeometryType: GeometryType(strings.TrimPrefix(geometryType.String(), "Multi")),
-		}
-		switch group.GeometryType {
-		case Point, Line, Polygon:
-		default:
-			return nil, fmt.Errorf(
-				"feature %d: unsupported geometry %s", i+1, geometryType,
-			)
-		}
-
-		if field != "" {
-			category, err := NewCategoryValue(feature.Properties[field])
-			if err != nil {
-				return nil, fmt.Errorf("feature %d, field %q: %w", i+1, field, err)
-			}
-			group.Category = category
-		}
 		seen[group] = true
 	}
 
@@ -112,4 +92,43 @@ func CollectStyleGroups(fgb *fgb.Fgb, field string) ([]StyleGroup, error) {
 	})
 
 	return groups, nil
+}
+
+func featureGeometryType(feature *fgb.Feature, fallback flat.GeometryType) (flat.GeometryType, bool) {
+	geometry := feature.Raw.Geometry(&flat.Geometry{})
+	if geometry == nil {
+		return flat.GeometryTypeUnknown, false
+	}
+
+	typ := geometry.Type()
+	if typ == flat.GeometryTypeUnknown {
+		typ = fallback
+	}
+
+	return typ, true
+}
+
+func featureStyleGroup(feature *fgb.Feature, fallback flat.GeometryType, field string, index int) (StyleGroup, bool, error) {
+	typ, present := featureGeometryType(feature, fallback)
+	if !present {
+		return StyleGroup{}, false, nil
+	}
+
+	group := StyleGroup{GeometryType: GeometryType(strings.TrimPrefix(typ.String(), "Multi"))}
+	switch group.GeometryType {
+	case Point, Line, Polygon:
+	default:
+		return StyleGroup{}, false, fmt.Errorf("feature %d: unsupported geometry %s", index+1, typ)
+	}
+
+	if field != "" {
+		category, err := NewCategoryValue(feature.Properties[field])
+		if err != nil {
+			return StyleGroup{}, false, fmt.Errorf("feature %d, field %q: %w", index+1, field, err)
+		}
+
+		group.Category = category
+	}
+
+	return group, true, nil
 }

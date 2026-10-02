@@ -150,7 +150,27 @@ func WriteFgb(data *Fgb, output string) error {
 	if data == nil || data.Header == nil || len(data.Features) == 0 || data.Header.IndexNodeSize() < 2 {
 		return fmt.Errorf("augmented FGB requires a header, features, and an enabled spatial index")
 	}
-	features, index, err := buildRTree(data)
+
+	// IndexData in the library only visits top-level XY coordinates. Recursing
+	// here includes the parts of MultiPolygons when computing spatial bounds.
+	refs := make([]packedrtree.Ref, len(data.Features))
+	bounds := packedrtree.EmptyBox
+
+	for i := range data.Features {
+		refs[i] = featureIndexReference(&data.Features[i].Raw, i)
+		bounds.Expand(&refs[i].Box)
+	}
+
+	packedrtree.HilbertSort(refs, bounds)
+	features := make([]flat.Feature, len(refs))
+	var offset int64
+
+	for i := range refs {
+		features[i] = data.Features[int(refs[i].Offset)].Raw
+		offset = assignFeatureOffset(&refs[i], &features[i], offset)
+	}
+
+	index, err := packedrtree.New(refs, data.Header.IndexNodeSize())
 	if err != nil {
 		return err
 	}
@@ -176,36 +196,21 @@ func WriteFgb(data *Fgb, output string) error {
 	return os.Rename(dst.Name(), output)
 }
 
-func buildRTree(data *Fgb) ([]flat.Feature, *packedrtree.PackedRTree, error) {
-	// IndexData in the library only visits top-level XY coordinates. Recursing
-	// here includes the parts of MultiPolygons when computing spatial bounds.
-	refs := make([]packedrtree.Ref, len(data.Features))
-	bounds := packedrtree.EmptyBox
-
-	for i := range data.Features {
-		box := packedrtree.EmptyBox
-		expandBounds(&box, data.Features[i].Raw.Geometry(&flat.Geometry{}))
-		if box == packedrtree.EmptyBox {
-			// Null/empty geometries still need an index entry with finite bounds.
-			box = packedrtree.Box{}
-		}
-		refs[i] = packedrtree.Ref{Box: box, Offset: int64(i)}
-		bounds.Expand(&box)
+func featureIndexReference(feature *flat.Feature, index int) packedrtree.Ref {
+	box := packedrtree.EmptyBox
+	expandBounds(&box, feature.Geometry(&flat.Geometry{}))
+	if box == packedrtree.EmptyBox {
+		// Null/empty geometries still need an index entry with finite bounds.
+		box = packedrtree.Box{}
 	}
 
-	packedrtree.HilbertSort(refs, bounds)
-	features := make([]flat.Feature, len(refs))
-	var offset int64
-	for i := range refs {
-		features[i] = data.Features[int(refs[i].Offset)].Raw
-		refs[i].Offset = offset
-		offset += int64(flatbuffers.GetUint32(features[i].Table().Bytes)) + flatbuffers.SizeUint32
-	}
-	index, err := packedrtree.New(refs, data.Header.IndexNodeSize())
-	if err != nil {
-		return nil, nil, err
-	}
-	return features, index, err
+	return packedrtree.Ref{Box: box, Offset: int64(index)}
+}
+
+func assignFeatureOffset(ref *packedrtree.Ref, feature *flat.Feature, offset int64) int64 {
+	ref.Offset = offset
+
+	return offset + int64(flatbuffers.GetUint32(feature.Table().Bytes)) + flatbuffers.SizeUint32
 }
 
 func expandBounds(box *packedrtree.Box, g *flat.Geometry) {

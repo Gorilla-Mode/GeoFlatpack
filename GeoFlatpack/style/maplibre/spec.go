@@ -25,6 +25,7 @@ type Spec map[string]json.RawMessage
 func LoadSpec() (Spec, error) {
 	var spec Spec
 	err := json.Unmarshal(specJSON, &spec)
+
 	return spec, err
 }
 
@@ -45,17 +46,24 @@ func (s Spec) Properties(layerType, section string) (map[string]PropertySpec, er
 	if section == "paint" {
 		extra := make(map[string]PropertySpec)
 		for name, property := range properties {
-			if property.Transition {
-				extra[name+"-transition"] = PropertySpec{
-					Type: "transition",
-					Doc:  `JSON object, for example {"duration":300,"delay":0}`,
-				}
-			}
+			addTransitionProperty(extra, name, property)
 		}
+
 		for name, property := range extra {
 			properties[name] = property
 		}
 	}
 
 	return properties, nil
+}
+
+func addTransitionProperty(properties map[string]PropertySpec, name string, property PropertySpec) {
+	if !property.Transition {
+		return
+	}
+
+	properties[name+"-transition"] = PropertySpec{
+		Type: "transition",
+		Doc:  `JSON object, for example {"duration":300,"delay":0}`,
+	}
 }

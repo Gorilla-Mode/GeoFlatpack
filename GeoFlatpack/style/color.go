@@ -28,11 +28,12 @@ func ParseRGB(input string) (Hex, error) {
 
 	var rgb [3]uint8
 	for i, part := range parts {
-		value, err := strconv.Atoi(strings.TrimSpace(part))
-		if err != nil || value < 0 || value > 255 {
-			return "", fmt.Errorf("each RGB value must be an integer between 0 and 255")
+		value, err := parseRGBChannel(part)
+		if err != nil {
+			return "", err
 		}
-		rgb[i] = uint8(value)
+
+		rgb[i] = value
 	}
 
 	return ToHex(color.RGBA{
@@ -41,4 +42,13 @@ func ParseRGB(input string) (Hex, error) {
 		B: rgb[2],
 		A: 255,
 	}), nil
+}
+
+func parseRGBChannel(input string) (uint8, error) {
+	value, err := strconv.Atoi(strings.TrimSpace(input))
+	if err != nil || value < 0 || value > 255 {
+		return 0, fmt.Errorf("each RGB value must be an integer between 0 and 255")
+	}
+
+	return uint8(value), nil
 }

@@ -38,6 +38,7 @@ func NewMapLibreStyle(filename, sourceName string, backgroundPaint style.Hex) (*
 			},
 		},
 	}
+
 	return styleHeader, sourceName
 }
 
@@ -68,12 +69,8 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle, catalogs
 	symbols := make([][]StyleLayer, len(inputs))
 
 	for i, input := range inputs {
-		if input.SourceID == "" {
-			return nil, fmt.Errorf("layer %d: empty source ID", i+1)
-		}
-
-		if _, exists := mapStyle.Sources[input.SourceID]; exists {
-			return nil, fmt.Errorf("duplicate source ID %q", input.SourceID)
+		if err := validateStyleSource(input.SourceID, i, mapStyle.Sources); err != nil {
+			return nil, err
 		}
 
 		mapStyle.Sources[input.SourceID] = map[string]any{
@@ -97,87 +94,157 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle, catalogs
 				}
 
 				id := fmt.Sprintf("%s-%s-%d", input.SourceID, geometry, j)
-				stack, configured := input.Styles[group]
-				if !configured {
-					stack = []RenderLayerStyle{{Type: RenderTypes[geometry][0]}}
+				stack, err := resolveGroupStack(input.Styles, group, id)
+				if err != nil {
+					return nil, err
 				}
 
-				if len(stack) == 0 {
-					return nil, fmt.Errorf("group %q: empty style stack", id)
+				hasLine := false
+				for _, layerStyle := range stack {
+					if layerStyle.Type == "line" {
+						hasLine = true
+					}
 				}
-
-				hasLine := slices.ContainsFunc(stack, func(style RenderLayerStyle) bool {
-					return style.Type == "line"
-				})
 
 				for k, layerStyle := range stack {
-					if layerStyle.Type != "symbol" && !slices.Contains(RenderTypes[geometry], layerStyle.Type) {
-						return nil, fmt.Errorf("group %q: unsupported render type %q for %s", id, layerStyle.Type, geometry)
+					layer, err := buildRenderLayer(input, group, id, k, layerStyle, hasLine, icons)
+					if err != nil {
+						return nil, err
 					}
 
-					layerID := id
-					if k > 0 {
-						layerID = fmt.Sprintf("%s-%d", id, k)
-					}
-
-					var layer StyleLayer
-
-					switch layerStyle.Type {
-					case "symbol":
-						icon, exists := icons[layerStyle.IconName]
-						if !exists {
-							return nil, fmt.Errorf("group %q: unknown SVG icon %q", id, layerStyle.IconName)
-						}
-
-						if geometry != Point && input.VertexMarker == "" {
-							return nil, fmt.Errorf("group %q: SVG icons require stored vertex companions", id)
-						}
-
-						pointGroup := group
-						pointGroup.GeometryType = Point
-						layer = newLayer("symbol", layerID, input.SourceID, input.CategoryField, pointGroup, Paint{}, layerStyle.Paint)
-
-						layer.Layout = map[string]any{"icon-size": 0.5, "icon-allow-overlap": true}
-
-						maps.Copy(layer.Layout, layerStyle.Layout)
-						layer.Layout["icon-image"] = layerStyle.IconName
-						layer.Layout["symbol-placement"] = "point"
-
-						if geometry != Point {
-							layer.Filter = []any{"all", layer.Filter, []any{"==", []any{"get", input.VertexMarker}, string(geometry)}}
-						}
-						selectedIcons[layerStyle.IconName] = icon.Svg
-					case "circle":
-						layer = PointLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
-					case "line":
-						layer = LineLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
-					case "fill":
-						layer = PolygonLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
-
-						if _, explicit := layerStyle.Paint["fill-outline-color"]; hasLine && !explicit {
-							layer.Paint["fill-outline-color"] = "transparent"
-						}
-					}
-
-					if geometry == Point && input.VertexMarker != "" {
-						layer.Filter = []any{"all", layer.Filter, []any{"!", []any{"has", input.VertexMarker}}}
-					}
 					if layerStyle.Type == "symbol" {
-						symbols[i] = append(symbols[i], layer)
-					} else {
-						mapStyle.Layers = append(mapStyle.Layers, layer)
+						selectedIcons[layerStyle.IconName] = icons[layerStyle.IconName].Svg
 					}
+
+					placeLayer(layer, &mapStyle.Layers, &symbols[i])
 				}
 			}
 		}
 	}
+
 	for _, stack := range symbols {
 		mapStyle.Layers = append(mapStyle.Layers, stack...)
 	}
+
 	if len(selectedIcons) > 0 {
 		mapStyle.Metadata = map[string]any{"geoflatpack:icons": selectedIcons}
 	}
+
 	return mapStyle, nil
+}
+
+func validateStyleSource(sourceID string, index int, sources map[string]map[string]any) error {
+	if sourceID == "" {
+		return fmt.Errorf("layer %d: empty source ID", index+1)
+	}
+
+	if _, exists := sources[sourceID]; exists {
+		return fmt.Errorf("duplicate source ID %q", sourceID)
+	}
+
+	return nil
+}
+
+func resolveGroupStack(styles map[StyleGroup][]RenderLayerStyle, group StyleGroup, id string) ([]RenderLayerStyle, error) {
+	stack, configured := styles[group]
+	if !configured {
+		stack = []RenderLayerStyle{{Type: RenderTypes[group.GeometryType][0]}}
+	}
+
+	if len(stack) == 0 {
+		return nil, fmt.Errorf("group %q: empty style stack", id)
+	}
+
+	return stack, nil
+}
+
+func buildRenderLayer(input LayerStyle, group StyleGroup, id string, index int, layerStyle RenderLayerStyle, hasLine bool, icons map[string]svg.Svg) (StyleLayer, error) {
+	if layerStyle.Type != "symbol" && !slices.Contains(RenderTypes[group.GeometryType], layerStyle.Type) {
+		return StyleLayer{}, fmt.Errorf("group %q: unsupported render type %q for %s", id, layerStyle.Type, group.GeometryType)
+	}
+
+	layerID := id
+	if index > 0 {
+		layerID = fmt.Sprintf("%s-%d", id, index)
+	}
+
+	var layer StyleLayer
+	switch layerStyle.Type {
+	case "symbol":
+		var err error
+		layer, err = buildSymbolLayer(input, group, id, layerID, layerStyle, icons)
+		if err != nil {
+			return StyleLayer{}, err
+		}
+
+	case "circle":
+		layer = PointLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
+
+	case "line":
+		layer = LineLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
+
+	case "fill":
+		layer = PolygonLayer(layerID, input.SourceID, input.CategoryField, group, layerStyle.Paint)
+		if _, explicit := layerStyle.Paint["fill-outline-color"]; hasLine && !explicit {
+			layer.Paint["fill-outline-color"] = "transparent"
+		}
+	}
+
+	layer.Filter = buildVertexFilter(layer.Filter, group.GeometryType, layerStyle.Type, input.VertexMarker)
+
+	return layer, nil
+}
+
+func buildSymbolLayer(input LayerStyle, group StyleGroup, id, layerID string, layerStyle RenderLayerStyle, icons map[string]svg.Svg) (StyleLayer, error) {
+	if _, exists := icons[layerStyle.IconName]; !exists {
+		return StyleLayer{}, fmt.Errorf("group %q: unknown SVG icon %q", id, layerStyle.IconName)
+	}
+
+	if group.GeometryType != Point && input.VertexMarker == "" {
+		return StyleLayer{}, fmt.Errorf("group %q: SVG icons require stored vertex companions", id)
+	}
+
+	pointGroup := group
+	pointGroup.GeometryType = Point
+	layer := newLayer("symbol", layerID, input.SourceID, input.CategoryField, pointGroup, Paint{}, layerStyle.Paint)
+	layer.Layout = buildSymbolLayout(layerStyle)
+
+	return layer, nil
+}
+
+func buildSymbolLayout(layerStyle RenderLayerStyle) map[string]any {
+	layout := map[string]any{"icon-size": 0.5, "icon-allow-overlap": true}
+	maps.Copy(layout, layerStyle.Layout)
+	layout["icon-image"] = layerStyle.IconName
+	layout["symbol-placement"] = "point"
+
+	return layout
+}
+
+func buildVertexFilter(filter []any, geometry GeometryType, renderType, marker string) []any {
+	if marker == "" {
+		return filter
+	}
+
+	if geometry == Point {
+		return []any{"all", filter, []any{"!", []any{"has", marker}}}
+	}
+
+	if renderType == "symbol" {
+		return []any{"all", filter, []any{"==", []any{"get", marker}, string(geometry)}}
+	}
+
+	return filter
+}
+
+func placeLayer(layer StyleLayer, base, symbols *[]StyleLayer) {
+	if layer.Type == "symbol" {
+		*symbols = append(*symbols, layer)
+
+		return
+	}
+
+	*base = append(*base, layer)
 }
 
 func styleName(filename string) string {
@@ -186,5 +253,6 @@ func styleName(filename string) string {
 	if name == "" {
 		return "features"
 	}
+
 	return name
 }

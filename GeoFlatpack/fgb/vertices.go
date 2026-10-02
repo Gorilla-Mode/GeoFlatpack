@@ -23,17 +23,19 @@ func WithVertexCompanions(data *Fgb, selected map[int]string) (*Fgb, string, err
 	}
 
 	names := make(map[string]bool)
-	collectNames := func(schema flatgeobuf.Schema) {
-		for i := 0; i < schema.ColumnsLength(); i++ {
-			var c flat.Column
-			schema.Columns(&c, i)
-			names[string(c.Name())] = true
-		}
+	for i := 0; i < data.Header.ColumnsLength(); i++ {
+		var column flat.Column
+		data.Header.Columns(&column, i)
+		names[string(column.Name())] = true
 	}
 
-	collectNames(data.Header)
 	for i := range data.Features {
-		collectNames(&data.Features[i].Raw)
+		for j := 0; j < data.Features[i].Raw.ColumnsLength(); j++ {
+			var column flat.Column
+			data.Features[i].Raw.Columns(&column, j)
+			names[string(column.Name())] = true
+		}
+
 		for name := range data.Features[i].Properties {
 			names[name] = true
 		}
@@ -48,31 +50,18 @@ func WithVertexCompanions(data *Fgb, selected map[int]string) (*Fgb, string, err
 	geometries := make([]*geometry, len(data.Features))
 	companions := make(map[int]*geometry)
 	for i := range data.Features {
-		g, err := readGeometry(data.Features[i].Raw.Geometry(&flat.Geometry{}), data.Header.GeometryType())
+		kind, wanted := selected[i]
+		g, vertices, err := prepareFeatureCompanion(&data.Features[i], data.Header.GeometryType(), kind, wanted, i)
 		if err != nil {
-			return nil, "", fmt.Errorf("feature %d: %w", i+1, err)
+			return nil, "", err
 		}
 
 		geometries[i] = g
-		kind, wanted := selected[i]
-		if !wanted || g == nil {
-			continue
-		}
-
-		valid := kind == "LineString" && (g.typ == flat.GeometryTypeLineString || g.typ == flat.GeometryTypeMultiLineString) ||
-			kind == "Polygon" && (g.typ == flat.GeometryTypePolygon || g.typ == flat.GeometryTypeMultiPolygon)
-		if !valid {
-			return nil, "", fmt.Errorf("feature %d: invalid vertex selection %q for %s", i+1, kind, g.typ)
-		}
-
-		vertices, err := g.vertices()
-		if err != nil {
-			return nil, "", fmt.Errorf("feature %d vertices: %w", i+1, err)
-		}
-		if len(vertices.xy) > 0 {
+		if vertices != nil {
 			companions[i] = vertices
 		}
 	}
+
 	if len(companions) == 0 {
 		return data, marker, nil
 	}
@@ -83,17 +72,11 @@ func WithVertexCompanions(data *Fgb, selected map[int]string) (*Fgb, string, err
 
 	result := &Fgb{Features: make([]Feature, 0, len(data.Features)+len(companions))}
 	for i, feature := range data.Features {
-		var localSchema flatgeobuf.Schema
-		markerIndex := data.Header.ColumnsLength()
-
-		if feature.Raw.ColumnsLength() > 0 {
-			localSchema = &feature.Raw
-			markerIndex = feature.Raw.ColumnsLength()
+		localSchema, markerIndex, err := resolveMarkerColumn(&feature.Raw, data.Header)
+		if err != nil {
+			return nil, "", fmt.Errorf("feature %d: %w", i+1, err)
 		}
 
-		if markerIndex >= 1<<16 {
-			return nil, "", fmt.Errorf("feature %d: no column index available for vertex marker", i+1)
-		}
 		payload := feature.Raw.PropertiesBytes()
 		result.Features = append(result.Features, Feature{
 			Raw:        packFeature(geometries[i], payload, localSchema, marker),
@@ -101,25 +84,88 @@ func WithVertexCompanions(data *Fgb, selected map[int]string) (*Fgb, string, err
 		})
 
 		if vertices := companions[i]; vertices != nil {
-			// Retain the original sparse property bytes exactly, including JSON,
-			// binary, and integer payloads. Only the new marker entry is appended.
-			properties := append([]byte(nil), payload...)
-			properties = binary.LittleEndian.AppendUint16(properties, uint16(markerIndex))
-			properties = binary.LittleEndian.AppendUint32(properties, uint32(len(selected[i])))
-			properties = append(properties, selected[i]...)
-			values := maps.Clone(feature.Properties)
-
-			if values == nil {
-				values = make(map[string]any)
-			}
-
-			values[marker] = selected[i]
-			result.Features = append(result.Features, Feature{
-				Raw: packFeature(vertices, properties, localSchema, marker), Properties: values,
-			})
+			result.Features = append(result.Features, buildCompanionFeature(feature, vertices, localSchema, markerIndex, marker, selected[i]))
 		}
 	}
+
 	result.Header = packHeader(data.Header, marker, len(result.Features))
 
 	return result, marker, nil
+}
+
+func prepareFeatureCompanion(feature *Feature, fallback flat.GeometryType, kind string, wanted bool, index int) (*geometry, *geometry, error) {
+	g, err := readGeometry(feature.Raw.Geometry(&flat.Geometry{}), fallback)
+	if err != nil {
+		return nil, nil, fmt.Errorf("feature %d: %w", index+1, err)
+	}
+
+	if !wanted || g == nil {
+		return g, nil, nil
+	}
+
+	if err := validateVertexSelection(g.typ, kind); err != nil {
+		return nil, nil, fmt.Errorf("feature %d: %w", index+1, err)
+	}
+
+	vertices, err := g.vertices()
+	if err != nil {
+		return nil, nil, fmt.Errorf("feature %d vertices: %w", index+1, err)
+	}
+
+	if len(vertices.xy) == 0 {
+		return g, nil, nil
+	}
+
+	return g, vertices, nil
+}
+
+func validateVertexSelection(typ flat.GeometryType, kind string) error {
+	valid := kind == "LineString" && (typ == flat.GeometryTypeLineString || typ == flat.GeometryTypeMultiLineString) ||
+		kind == "Polygon" && (typ == flat.GeometryTypePolygon || typ == flat.GeometryTypeMultiPolygon)
+	if !valid {
+		return fmt.Errorf("invalid vertex selection %q for %s", kind, typ)
+	}
+
+	return nil
+}
+
+func resolveMarkerColumn(feature *flat.Feature, header *flat.Header) (flatgeobuf.Schema, int, error) {
+	var localSchema flatgeobuf.Schema
+	markerIndex := header.ColumnsLength()
+	if feature.ColumnsLength() > 0 {
+		localSchema = feature
+		markerIndex = feature.ColumnsLength()
+	}
+
+	if markerIndex >= 1<<16 {
+		return nil, 0, fmt.Errorf("no column index available for vertex marker")
+	}
+
+	return localSchema, markerIndex, nil
+}
+
+func encodeMarkerPayload(payload []byte, markerIndex int, kind string) []byte {
+	// Retain the original sparse property bytes exactly, including JSON,
+	// binary, and integer payloads. Only the new marker entry is appended.
+	properties := append([]byte(nil), payload...)
+	properties = binary.LittleEndian.AppendUint16(properties, uint16(markerIndex))
+	properties = binary.LittleEndian.AppendUint32(properties, uint32(len(kind)))
+	properties = append(properties, kind...)
+
+	return properties
+}
+
+func buildCompanionFeature(feature Feature, vertices *geometry, schema flatgeobuf.Schema, markerIndex int, marker, kind string) Feature {
+	properties := encodeMarkerPayload(feature.Raw.PropertiesBytes(), markerIndex, kind)
+	values := maps.Clone(feature.Properties)
+	if values == nil {
+		values = make(map[string]any)
+	}
+
+	values[marker] = kind
+
+	return Feature{
+		Raw:        packFeature(vertices, properties, schema, marker),
+		Properties: values,
+	}
 }
