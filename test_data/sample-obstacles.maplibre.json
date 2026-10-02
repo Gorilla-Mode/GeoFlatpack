@@ -3,6 +3,11 @@
   "name": "GeoFlatpack sample obstacles",
   "center": [10.7489, 59.9126],
   "zoom": 15,
+  "metadata": {
+    "geoflatpack:icons": {
+      "star": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"><polygon points=\"16,2 20,11 30,12 22,19 24,29 16,24 8,29 10,19 2,12 12,11\" fill=\"#2563eb\" stroke=\"#1e3a8a\" stroke-width=\"2\" stroke-linejoin=\"round\"/></svg>"
+    }
+  },
   "sources": {
     "sample-obstacles": {
       "type": "geojson",
@@ -24,7 +29,11 @@
       "id": "buildings",
       "type": "fill",
       "source": "sample-obstacles",
-      "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "kind"], "building"]],
+      "filter": [
+        "all",
+        ["==", ["geometry-type"], "Polygon"],
+        ["==", ["get", "kind"], "building"]
+      ],
       "paint": {
         "fill-color": "#2563eb",
         "fill-opacity": 0.55,
@@ -32,19 +41,14 @@
       }
     },
     {
-      "id": "buildings-circle",
-      "type": "circle",
-      "source": "sample-obstacles",
-      "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "kind"], "building"]],
-      "paint": {
-        "circle-color": "#2563eb"
-      }
-    },
-    {
       "id": "buildings-line",
       "type": "line",
       "source": "sample-obstacles",
-      "filter": ["all", ["==", ["geometry-type"], "Polygon"], ["==", ["get", "kind"], "building"]],
+      "filter": [
+        "all",
+        ["==", ["geometry-type"], "Polygon"],
+        ["==", ["get", "kind"], "building"]
+      ],
       "paint": {
         "line-color": "#dc2626",
         "line-width": 2,
@@ -52,10 +56,33 @@
       }
     },
     {
+      "id": "buildings-star",
+      "type": "symbol",
+      "source": "sample-obstacles",
+      "metadata": {
+        "geoflatpack:placement": "vertices"
+      },
+      "filter": [
+        "all",
+        ["==", ["geometry-type"], "Point"],
+        ["==", ["get", "kind"], "building"]
+      ],
+      "layout": {
+        "symbol-placement": "point",
+        "icon-image": "star",
+        "icon-size": 0.5,
+        "icon-allow-overlap": true
+      }
+    },
+    {
       "id": "power-lines",
       "type": "line",
       "source": "sample-obstacles",
-      "filter": ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "kind"], "power_line"]],
+      "filter": [
+        "all",
+        ["==", ["geometry-type"], "LineString"],
+        ["==", ["get", "kind"], "power_line"]
+      ],
       "paint": {
         "line-color": "#dc2626",
         "line-width": 5
@@ -65,7 +92,11 @@
       "id": "street-lights",
       "type": "circle",
       "source": "sample-obstacles",
-      "filter": ["all", ["==", ["geometry-type"], "Point"], ["==", ["get", "kind"], "street_light"]],
+      "filter": [
+        "all",
+        ["==", ["geometry-type"], "Point"],
+        ["==", ["get", "kind"], "street_light"]
+      ],
       "paint": {
         "circle-color": "#f59e0b",
         "circle-radius": 9,
