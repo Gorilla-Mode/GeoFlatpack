@@ -1,4 +1,10 @@
 {
+  "metadata": {
+    "geoflatpack:icons": {
+      "star-blue": "\u003csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"\u003e\n  \u003cpolygon points=\"16,2 20,11 30,12 22,19 24,29 16,24 8,29 10,19 2,12 12,11\"\n           fill=\"#2563eb\" stroke=\"#1e3a8a\" stroke-width=\"2\" stroke-linejoin=\"round\"/\u003e\n\u003c/svg\u003e\n",
+      "star-red": "\u003csvg xmlns=\"http://www.w3.org/2000/svg\" width=\"32\" height=\"32\" viewBox=\"0 0 32 32\"\u003e\n  \u003cpolygon points=\"16,2 20,11 30,12 22,19 24,29 16,24 8,29 10,19 2,12 12,11\"\n           fill=\"#dc2626\" stroke=\"#7f1d1d\" stroke-width=\"2\" stroke-linejoin=\"round\"/\u003e\n\u003c/svg\u003e\n"
+    }
+  },
   "version": 8,
   "name": "Forurensning_0000_Norge_3035_Skytefelt_GML",
   "sources": {
@@ -103,7 +109,7 @@
         ]
       ],
       "paint": {
-        "line-color": "#ffffff",
+        "line-color": "#ff0000",
         "line-dasharray": [
           2,
           2
@@ -134,10 +140,10 @@
         ]
       ],
       "paint": {
-        "circle-color": "#ffffff",
-        "circle-radius": 3,
+        "circle-color": "#ff0000",
+        "circle-radius": 6,
         "circle-stroke-color": "#000000",
-        "circle-stroke-width": 1
+        "circle-stroke-width": 2
       }
     },
     {
@@ -163,7 +169,7 @@
         ]
       ],
       "paint": {
-        "fill-color": "#00ff00",
+        "fill-color": "#ffff00",
         "fill-opacity": 0.55,
         "fill-outline-color": "transparent"
       }
@@ -219,16 +225,12 @@
       ],
       "paint": {
         "line-color": "#ffffff",
-        "line-dasharray": [
-          2,
-          2
-        ],
         "line-width": 3
       }
     },
     {
       "id": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt-Polygon-1-3",
-      "type": "circle",
+      "type": "line",
       "source": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt",
       "filter": [
         "all",
@@ -249,10 +251,12 @@
         ]
       ],
       "paint": {
-        "circle-color": "#ffffff",
-        "circle-radius": 3,
-        "circle-stroke-color": "#000000",
-        "circle-stroke-width": 1
+        "line-color": "#000000",
+        "line-dasharray": [
+          2,
+          2
+        ],
+        "line-width": 3
       }
     },
     {
@@ -278,7 +282,7 @@
         ]
       ],
       "paint": {
-        "fill-color": "#ffff40",
+        "fill-color": "#ff0000",
         "fill-opacity": 0.55,
         "fill-outline-color": "transparent"
       }
@@ -306,7 +310,7 @@
         ]
       ],
       "paint": {
-        "line-color": "#ffffff",
+        "line-color": "#000000",
         "line-width": 3
       }
     },
@@ -333,14 +337,14 @@
         ]
       ],
       "paint": {
-        "fill-color": "#ff00ff",
+        "fill-color": "#0000ff",
         "fill-opacity": 0.55,
-        "fill-outline-color": "#1e3a8a"
+        "fill-outline-color": "transparent"
       }
     },
     {
       "id": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt-Polygon-3-1",
-      "type": "circle",
+      "type": "line",
       "source": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt",
       "filter": [
         "all",
@@ -361,11 +365,39 @@
         ]
       ],
       "paint": {
-        "circle-color": "#ff0000",
-        "circle-opacity": 0.75,
-        "circle-radius": 6,
-        "circle-stroke-color": "#000000",
-        "circle-stroke-width": 2
+        "line-color": "#ff0000",
+        "line-width": 3
+      }
+    },
+    {
+      "id": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt-Polygon-3-2",
+      "type": "line",
+      "source": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt",
+      "filter": [
+        "all",
+        [
+          "==",
+          [
+            "geometry-type"
+          ],
+          "Polygon"
+        ],
+        [
+          "==",
+          [
+            "get",
+            "type"
+          ],
+          "øvingsfelt"
+        ]
+      ],
+      "paint": {
+        "line-color": "#0000ff",
+        "line-dasharray": [
+          2,
+          2
+        ],
+        "line-width": 3
       }
     },
     {
@@ -380,8 +412,131 @@
         "LineString"
       ],
       "paint": {
-        "line-color": "#ff0000",
+        "line-color": "#dc2626",
         "line-width": 3
+      }
+    },
+    {
+      "id": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt-Polygon-1-4",
+      "type": "symbol",
+      "source": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt",
+      "filter": [
+        "all",
+        [
+          "all",
+          [
+            "==",
+            [
+              "geometry-type"
+            ],
+            "Point"
+          ],
+          [
+            "==",
+            [
+              "get",
+              "type"
+            ],
+            "skytebaneanlegg"
+          ]
+        ],
+        [
+          "==",
+          [
+            "get",
+            "__geoflatpack_vertices"
+          ],
+          "Polygon"
+        ]
+      ],
+      "layout": {
+        "icon-allow-overlap": false,
+        "icon-ignore-placement": false,
+        "icon-image": "star-blue",
+        "icon-size": 1,
+        "symbol-placement": "point"
+      }
+    },
+    {
+      "id": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt-Polygon-2-2",
+      "type": "symbol",
+      "source": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt",
+      "filter": [
+        "all",
+        [
+          "all",
+          [
+            "==",
+            [
+              "geometry-type"
+            ],
+            "Point"
+          ],
+          [
+            "==",
+            [
+              "get",
+              "type"
+            ],
+            "skytefelt"
+          ]
+        ],
+        [
+          "==",
+          [
+            "get",
+            "__geoflatpack_vertices"
+          ],
+          "Polygon"
+        ]
+      ],
+      "layout": {
+        "icon-allow-overlap": false,
+        "icon-ignore-placement": false,
+        "icon-image": "star-red",
+        "icon-size": 1,
+        "symbol-placement": "point"
+      }
+    },
+    {
+      "id": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt-Polygon-3-3",
+      "type": "symbol",
+      "source": "Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt",
+      "filter": [
+        "all",
+        [
+          "all",
+          [
+            "==",
+            [
+              "geometry-type"
+            ],
+            "Point"
+          ],
+          [
+            "==",
+            [
+              "get",
+              "type"
+            ],
+            "øvingsfelt"
+          ]
+        ],
+        [
+          "==",
+          [
+            "get",
+            "__geoflatpack_vertices"
+          ],
+          "Polygon"
+        ]
+      ],
+      "layout": {
+        "icon-allow-overlap": false,
+        "icon-ignore-placement": false,
+        "icon-image": "star-blue",
+        "icon-size": 0.5,
+        "symbol-placement": "point"
       }
     }
   ]
