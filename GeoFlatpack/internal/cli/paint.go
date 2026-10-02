@@ -283,8 +283,8 @@ func promptIcon(icons map[string]svg.Svg, scanner *bufio.Scanner, out io.Writer)
 			return "", nil, err
 		}
 	}
-	size := 0.5
 
+	size := 0.5
 	for {
 		input, err := promptLine(scanner, out, "Icon size [0.5]: ")
 		if err != nil {
@@ -305,9 +305,10 @@ func promptIcon(icons map[string]svg.Svg, scanner *bufio.Scanner, out io.Writer)
 			return "", nil, err
 		}
 	}
-	overlap := true
+
+	overlap := false
 	for {
-		input, err := promptLine(scanner, out, "Allow icon overlap [true]: ")
+		input, err := promptLine(scanner, out, "WARNING: More performance intensive.\nAllow icon overlap [false]:")
 		if err != nil {
 			return "", nil, err
 		}
@@ -326,8 +327,33 @@ func promptIcon(icons map[string]svg.Svg, scanner *bufio.Scanner, out io.Writer)
 			return "", nil, err
 		}
 	}
+	ignorePlacment := true
+	for {
+		input, err := promptLine(scanner, out, "WARNING: More performance intensive .\nIgnore icon placement [false]:")
+		if err != nil {
+			return "", nil, err
+		}
+
+		if input == "" {
+			break
+		}
+
+		value, err := strconv.ParseBool(input)
+		if err == nil {
+			ignorePlacment = value
+			break
+		}
+
+		if _, err := fmt.Fprintln(out, "Enter true or false."); err != nil {
+			return "", nil, err
+		}
+	}
+
 	return name, map[string]any{
-		"icon-image": name, "icon-size": size,
-		"icon-allow-overlap": overlap, "symbol-placement": "point",
+		"icon-image":            name,
+		"icon-size":             size,
+		"icon-allow-overlap":    overlap,
+		"icon-ignore-placement": ignorePlacment,
+		"symbol-placement":      "point",
 	}, nil
 }
