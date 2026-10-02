@@ -150,6 +150,33 @@ func WriteFgb(data *Fgb, output string) error {
 	if data == nil || data.Header == nil || len(data.Features) == 0 || data.Header.IndexNodeSize() < 2 {
 		return fmt.Errorf("augmented FGB requires a header, features, and an enabled spatial index")
 	}
+	features, index, err := buildRTree(data)
+	if err != nil {
+		return err
+	}
+
+	dst, err := os.CreateTemp(filepath.Dir(output), ".gfp-*.fgb")
+	if err != nil {
+		return err
+	}
+
+	defer func() { _ = os.Remove(dst.Name()) }()
+	writer := flatgeobuf.NewFileWriter(dst)
+	_, err = writer.Header(data.Header)
+	if err == nil {
+		_, err = writer.Index(index)
+	}
+	if err == nil {
+		_, err = writer.Data(features)
+	}
+	if err = errors.Join(err, writer.Close()); err != nil {
+		return err
+	}
+
+	return os.Rename(dst.Name(), output)
+}
+
+func buildRTree(data *Fgb) ([]flat.Feature, *packedrtree.PackedRTree, error) {
 	// IndexData in the library only visits top-level XY coordinates. Recursing
 	// here includes the parts of MultiPolygons when computing spatial bounds.
 	refs := make([]packedrtree.Ref, len(data.Features))
@@ -174,31 +201,11 @@ func WriteFgb(data *Fgb, output string) error {
 		refs[i].Offset = offset
 		offset += int64(flatbuffers.GetUint32(features[i].Table().Bytes)) + flatbuffers.SizeUint32
 	}
-
 	index, err := packedrtree.New(refs, data.Header.IndexNodeSize())
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-
-	dst, err := os.CreateTemp(filepath.Dir(output), ".gfp-*.fgb")
-	if err != nil {
-		return err
-	}
-
-	defer func() { _ = os.Remove(dst.Name()) }()
-	writer := flatgeobuf.NewFileWriter(dst)
-	_, err = writer.Header(data.Header)
-	if err == nil {
-		_, err = writer.Index(index)
-	}
-	if err == nil {
-		_, err = writer.Data(features)
-	}
-	if err = errors.Join(err, writer.Close()); err != nil {
-		return err
-	}
-
-	return os.Rename(dst.Name(), output)
+	return features, index, err
 }
 
 func expandBounds(box *packedrtree.Box, g *flat.Geometry) {

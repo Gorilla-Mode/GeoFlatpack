@@ -45,6 +45,7 @@ func NewCategoryValue(value any) (CategoryValue, error) {
 	default:
 		return CategoryValue{}, fmt.Errorf("complex or binary values (%T) cannot be styling categories", value)
 	}
+
 	return CategoryValue{kind: "number", value: number}, nil
 }
 

@@ -47,14 +47,7 @@ func InspectFgb(fgb *Fgb) string {
 		feature := &fgb.Features[i]
 		_, _ = fmt.Fprintf(&b, "\nFeature %d\n", i+1)
 
-		if geometry := feature.Raw.Geometry(&flat.Geometry{}); geometry != nil {
-			_, _ = fmt.Fprintf(&b, "\tGeometry Type: %s\n", geometry.Type())
-
-			for j := 0; j+1 < geometry.XyLength(); j += 2 {
-				_, _ = fmt.Fprintf(&b, "\tX: %g Y: %g\n",
-					geometry.Xy(j), geometry.Xy(j+1))
-			}
-		}
+		printGeometry(feature, b)
 
 		names := make([]string, 0, len(feature.Properties))
 		for name := range feature.Properties {
@@ -68,4 +61,15 @@ func InspectFgb(fgb *Fgb) string {
 	}
 
 	return b.String()
+}
+
+func printGeometry(feature *Feature, b strings.Builder) {
+	if geometry := feature.Raw.Geometry(&flat.Geometry{}); geometry != nil {
+		_, _ = fmt.Fprintf(&b, "\tGeometry Type: %s\n", geometry.Type())
+
+		for j := 0; j+1 < geometry.XyLength(); j += 2 {
+			_, _ = fmt.Fprintf(&b, "\tX: %g Y: %g\n",
+				geometry.Xy(j), geometry.Xy(j+1))
+		}
+	}
 }

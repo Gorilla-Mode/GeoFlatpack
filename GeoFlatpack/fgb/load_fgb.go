@@ -43,17 +43,9 @@ func buildFGB(rawFgb RawFgb) (*Fgb, error) {
 	for i := range rawFgb.Features {
 		props := make(map[string]any)
 
-		if rawFgb.Features[i].PropertiesLength() > 0 {
-			var schema flatgeobuf.Schema = rawFgb.header
-			if rawFgb.Features[i].ColumnsLength() > 0 {
-				schema = &rawFgb.Features[i]
-			}
-
-			values, err := readProperties(rawFgb.Features[i].PropertiesBytes(), schema)
-			if err != nil {
-				return nil, fmt.Errorf("feature %d properties: %w", i+1, err)
-			}
-			props = values
+		props, f, err := getPropertiesFGB(rawFgb, i, props)
+		if err != nil {
+			return f, err
 		}
 
 		fgb.Features = append(fgb.Features, Feature{
@@ -63,4 +55,20 @@ func buildFGB(rawFgb RawFgb) (*Fgb, error) {
 	}
 
 	return fgb, nil
+}
+
+func getPropertiesFGB(rawFgb RawFgb, i int, props map[string]any) (map[string]any, *Fgb, error) {
+	if rawFgb.Features[i].PropertiesLength() > 0 {
+		var schema flatgeobuf.Schema = rawFgb.header
+		if rawFgb.Features[i].ColumnsLength() > 0 {
+			schema = &rawFgb.Features[i]
+		}
+
+		values, err := readProperties(rawFgb.Features[i].PropertiesBytes(), schema)
+		if err != nil {
+			return nil, nil, fmt.Errorf("feature %d properties: %w", i+1, err)
+		}
+		props = values
+	}
+	return props, nil, nil
 }

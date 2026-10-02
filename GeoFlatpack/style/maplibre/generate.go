@@ -58,10 +58,12 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle, catalogs
 	mapStyle, _ := NewMapLibreStyle(filename, "", backgroundPaint)
 	mapStyle.Sources = make(map[string]map[string]any, len(inputs))
 	groups := make([][]StyleGroup, len(inputs))
+
 	var icons map[string]svg.Svg
 	if len(catalogs) > 0 {
 		icons = catalogs[0]
 	}
+
 	selectedIcons := make(map[string]string)
 	symbols := make([][]StyleLayer, len(inputs))
 
@@ -99,20 +101,25 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle, catalogs
 				if !configured {
 					stack = []RenderLayerStyle{{Type: RenderTypes[geometry][0]}}
 				}
+
 				if len(stack) == 0 {
 					return nil, fmt.Errorf("group %q: empty style stack", id)
 				}
+
 				hasLine := slices.ContainsFunc(stack, func(style RenderLayerStyle) bool {
 					return style.Type == "line"
 				})
+
 				for k, layerStyle := range stack {
 					if layerStyle.Type != "symbol" && !slices.Contains(RenderTypes[geometry], layerStyle.Type) {
 						return nil, fmt.Errorf("group %q: unsupported render type %q for %s", id, layerStyle.Type, geometry)
 					}
+
 					layerID := id
 					if k > 0 {
 						layerID = fmt.Sprintf("%s-%d", id, k)
 					}
+
 					var layer StyleLayer
 
 					switch layerStyle.Type {
@@ -121,16 +128,21 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle, catalogs
 						if !exists {
 							return nil, fmt.Errorf("group %q: unknown SVG icon %q", id, layerStyle.IconName)
 						}
+
 						if geometry != Point && input.VertexMarker == "" {
 							return nil, fmt.Errorf("group %q: SVG icons require stored vertex companions", id)
 						}
+
 						pointGroup := group
 						pointGroup.GeometryType = Point
 						layer = newLayer("symbol", layerID, input.SourceID, input.CategoryField, pointGroup, Paint{}, layerStyle.Paint)
+
 						layer.Layout = map[string]any{"icon-size": 0.5, "icon-allow-overlap": true}
+
 						maps.Copy(layer.Layout, layerStyle.Layout)
 						layer.Layout["icon-image"] = layerStyle.IconName
 						layer.Layout["symbol-placement"] = "point"
+
 						if geometry != Point {
 							layer.Filter = []any{"all", layer.Filter, []any{"==", []any{"get", input.VertexMarker}, string(geometry)}}
 						}
