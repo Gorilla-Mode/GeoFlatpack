@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/gogama/flatgeobuf/flatgeobuf"
+	"github.com/gogama/flatgeobuf/flatgeobuf/flat"
 )
 
 func LoadFgb(src io.Reader) (loadedFGB *Fgb, err error) {
@@ -41,19 +42,9 @@ func buildFGB(rawFgb RawFgb) (*Fgb, error) {
 	}
 
 	for i := range rawFgb.Features {
-		props := make(map[string]any)
-
-		if rawFgb.Features[i].PropertiesLength() > 0 {
-			var schema flatgeobuf.Schema = rawFgb.header
-			if rawFgb.Features[i].ColumnsLength() > 0 {
-				schema = &rawFgb.Features[i]
-			}
-
-			values, err := readProperties(rawFgb.Features[i].PropertiesBytes(), schema)
-			if err != nil {
-				return nil, fmt.Errorf("feature %d properties: %w", i+1, err)
-			}
-			props = values
+		props, err := readFeatureProperties(&rawFgb.Features[i], rawFgb.header)
+		if err != nil {
+			return nil, fmt.Errorf("feature %d properties: %w", i+1, err)
 		}
 
 		fgb.Features = append(fgb.Features, Feature{
@@ -63,4 +54,16 @@ func buildFGB(rawFgb RawFgb) (*Fgb, error) {
 	}
 
 	return fgb, nil
+}
+
+func readFeatureProperties(feature *flat.Feature, schema flatgeobuf.Schema) (map[string]any, error) {
+	if feature.PropertiesLength() == 0 {
+		return make(map[string]any), nil
+	}
+
+	if feature.ColumnsLength() > 0 {
+		schema = feature
+	}
+
+	return readProperties(feature.PropertiesBytes(), schema)
 }

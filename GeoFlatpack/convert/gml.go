@@ -178,6 +178,7 @@ func (fgb *MemoryFGB) Close() error {
 		err = fgb.Dataset.Close()
 		fgb.Dataset = nil
 	}
+
 	if fgb.path != "" {
 		err = errors.Join(err, godal.VSIUnlink(fgb.path))
 		fgb.path = ""
@@ -185,5 +186,6 @@ func (fgb *MemoryFGB) Close() error {
 	if err != nil {
 		return fmt.Errorf("close layer %q: %w", fgb.LayerName, err)
 	}
+
 	return nil
 }

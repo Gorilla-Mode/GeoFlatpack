@@ -60,6 +60,7 @@ func PromptCategoryField(fields []maplibre.CategoryField, scanner *bufio.Scanner
 			return "", err
 		}
 	}
+
 	for {
 		input, err := promptRawLine(scanner, out, "Which field should define the styling categories? ")
 

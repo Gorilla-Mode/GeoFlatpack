@@ -32,13 +32,24 @@ func ReadSvgs(dir string) (map[string]Svg, error) {
 			continue
 		}
 
-		svg, err := os.ReadFile(filepath.Join(dir, file.Name()))
+		icon, err := readSVGFile(dir, file.Name())
 		if err != nil {
-			return nil, fmt.Errorf("failed to read svg: %w", err)
+			return nil, err
 		}
 
-		name := strings.TrimSuffix(file.Name(), ".svg")
-		svgs[name] = Svg{Key: name, Svg: string(svg)}
+		svgs[icon.Key] = icon
 	}
+
 	return svgs, nil
+}
+
+func readSVGFile(dir, filename string) (Svg, error) {
+	data, err := os.ReadFile(filepath.Join(dir, filename))
+	if err != nil {
+		return Svg{}, fmt.Errorf("failed to read svg: %w", err)
+	}
+
+	name := strings.TrimSuffix(filename, ".svg")
+
+	return Svg{Key: name, Svg: string(data)}, nil
 }

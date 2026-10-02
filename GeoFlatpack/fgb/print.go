@@ -48,11 +48,10 @@ func InspectFgb(fgb *Fgb) string {
 		_, _ = fmt.Fprintf(&b, "\nFeature %d\n", i+1)
 
 		if geometry := feature.Raw.Geometry(&flat.Geometry{}); geometry != nil {
-			_, _ = fmt.Fprintf(&b, "\tGeometry Type: %s\n", geometry.Type())
+			printGeometryType(&b, geometry)
 
 			for j := 0; j+1 < geometry.XyLength(); j += 2 {
-				_, _ = fmt.Fprintf(&b, "\tX: %g Y: %g\n",
-					geometry.Xy(j), geometry.Xy(j+1))
+				printCoordinate(&b, geometry.Xy(j), geometry.Xy(j+1))
 			}
 		}
 
@@ -68,4 +67,12 @@ func InspectFgb(fgb *Fgb) string {
 	}
 
 	return b.String()
+}
+
+func printGeometryType(b *strings.Builder, geometry *flat.Geometry) {
+	_, _ = fmt.Fprintf(b, "\tGeometry Type: %s\n", geometry.Type())
+}
+
+func printCoordinate(b *strings.Builder, x, y float64) {
+	_, _ = fmt.Fprintf(b, "\tX: %g Y: %g\n", x, y)
 }

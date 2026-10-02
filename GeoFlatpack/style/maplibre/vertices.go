@@ -3,7 +3,6 @@ package maplibre
 import (
 	"GeoFlatpack/fgb"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/gogama/flatgeobuf/flatgeobuf/flat"
@@ -15,36 +14,61 @@ func PrepareVertexCompanions(input *LayerStyle) (*fgb.Fgb, error) {
 	if input == nil || input.Data == nil || input.Data.Header == nil {
 		return nil, fmt.Errorf("missing styling input, FGB, or header")
 	}
-	selected := make(map[int]string)
+
+	selected := make(map[int]fgb.VertexKind)
 	for i := range input.Data.Features {
-		feature := &input.Data.Features[i]
-		g := feature.Raw.Geometry(&flat.Geometry{})
-		if g == nil {
+		group, eligible, err := vertexStyleGroup(&input.Data.Features[i], input.Data.Header.GeometryType(), input.CategoryField, i)
+		if err != nil {
+			return nil, err
+		}
+
+		if !eligible {
 			continue
 		}
-		typ := g.Type()
-		if typ == flat.GeometryTypeUnknown {
-			typ = input.Data.Header.GeometryType()
-		}
-		group := StyleGroup{GeometryType: GeometryType(strings.TrimPrefix(typ.String(), "Multi"))}
-		if group.GeometryType != Line && group.GeometryType != Polygon {
-			continue
-		}
-		if input.CategoryField != "" {
-			category, err := NewCategoryValue(feature.Properties[input.CategoryField])
-			if err != nil {
-				return nil, fmt.Errorf("feature %d: %w", i+1, err)
+
+		for _, layer := range input.Styles[group] {
+			if layer.Type == RenderSymbol {
+				switch group.GeometryType {
+				case Line:
+					selected[i] = fgb.VertexLineString
+				case Polygon:
+					selected[i] = fgb.VertexPolygon
+				}
+
+				break
 			}
-			group.Category = category
-		}
-		if slices.ContainsFunc(input.Styles[group], func(layer RenderLayerStyle) bool { return layer.Type == "symbol" }) {
-			selected[i] = string(group.GeometryType)
 		}
 	}
+
 	data, marker, err := fgb.WithVertexCompanions(input.Data, selected)
 	if err != nil {
 		return nil, err
 	}
+
 	input.VertexMarker = marker
+
 	return data, nil
+}
+
+func vertexStyleGroup(feature *fgb.Feature, fallback flat.GeometryType, field string, index int) (StyleGroup, bool, error) {
+	typ, present := featureGeometryType(feature, fallback)
+	if !present {
+		return StyleGroup{}, false, nil
+	}
+
+	group := StyleGroup{GeometryType: GeometryType(strings.TrimPrefix(typ.String(), "Multi"))}
+	if group.GeometryType != Line && group.GeometryType != Polygon {
+		return StyleGroup{}, false, nil
+	}
+
+	if field != "" {
+		category, err := NewCategoryValue(feature.Properties[field])
+		if err != nil {
+			return StyleGroup{}, false, fmt.Errorf("feature %d: %w", index+1, err)
+		}
+
+		group.Category = category
+	}
+
+	return group, true, nil
 }
