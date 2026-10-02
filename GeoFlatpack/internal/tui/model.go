@@ -13,12 +13,13 @@ import (
 
 // Model retains workflow options for future processing screens.
 type Model struct {
-	Options app.Options
-	help    help.Model
-	keys    keyMap
-	styles  styles
-	width   int
-	height  int
+	Options    app.Options
+	help       help.Model
+	keys       keyMap
+	detailKeys detailKeyMap
+	styles     styles
+	width      int
+	height     int
 }
 
 // NewModel creates the scaffold without preparing or processing input files.
@@ -28,12 +29,13 @@ func NewModel(opts app.Options) Model {
 	h.Styles = s.help
 	h.SetWidth(80 - s.frame.GetHorizontalFrameSize())
 	return Model{
-		Options: opts,
-		help:    h,
-		keys:    newKeyMap(),
-		styles:  s,
-		width:   80,
-		height:  24,
+		Options:    opts,
+		help:       h,
+		keys:       newKeyMap(),
+		detailKeys: newDetailKeyMap(),
+		styles:     s,
+		width:      80,
+		height:     24,
 	}
 }
 
@@ -68,7 +70,7 @@ func (m Model) View() tea.View {
 
 	helpText := m.styles.helpBox.
 		Width(max(1, width-m.styles.helpBox.GetHorizontalFrameSize())).
-		Render(m.help.View(m.keys))
+		Render(m.help.View(helpKeyMap{m.keys, m.detailKeys}))
 
 	body := strings.Join([]string{
 		m.styles.title.Width(width).Render("GeoFlatpack"),
