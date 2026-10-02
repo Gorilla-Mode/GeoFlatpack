@@ -257,15 +257,31 @@ export default function App() {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    const { cleanup, errors, renderedLayerIds } = renderMapLayers(map, visibleLayers.map(layer => ({
+    const controller = new AbortController();
+    let cleanup: ((mapActive: boolean) => void) | undefined;
+    void renderMapLayers(map, visibleLayers.map(layer => ({
       layer, style: styles.find(style => style.id === layer.styleId)!.style,
-    })));
-    setDisplayErrors(errors);
-    const newlyVisible = visibleLayers.filter(layer => renderedLayerIds.has(layer.id) && pendingCenters.current.has(layer.id));
-    const nextBounds = layerBounds(newlyVisible);
-    newlyVisible.forEach(layer => pendingCenters.current.delete(layer.id));
-    if (nextBounds) map.fitBounds(nextBounds, fitOptions);
-    return () => cleanup(mapRef.current === map);
+    })), controller.signal).then(result => {
+      if (controller.signal.aborted || mapRef.current !== map) {
+        result.cleanup(mapRef.current === map);
+        return;
+      }
+      cleanup = result.cleanup;
+      setDisplayErrors(result.errors);
+      const newlyVisible = visibleLayers.filter(layer => result.renderedLayerIds.has(layer.id) && pendingCenters.current.has(layer.id));
+      const nextBounds = layerBounds(newlyVisible);
+      newlyVisible.forEach(layer => pendingCenters.current.delete(layer.id));
+      if (nextBounds) map.fitBounds(nextBounds, fitOptions);
+    }).catch(cause => {
+      if (controller.signal.aborted || mapRef.current !== map) return;
+      setDisplayErrors(Object.fromEntries(visibleLayers.map(layer => [
+        layer.id, `Unable to display ${layer.label}: ${getErrorMessage(cause)}`,
+      ])));
+    });
+    return () => {
+      controller.abort();
+      cleanup?.(mapRef.current === map);
+    };
   }, [visibleLayers, styles, mapReady]);
 
   return (

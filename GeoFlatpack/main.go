@@ -5,6 +5,7 @@ import (
 	"GeoFlatpack/fgb"
 	"GeoFlatpack/internal/cli"
 	"GeoFlatpack/style/maplibre"
+	"GeoFlatpack/style/maplibre/svg"
 	"GeoFlatpack/validate"
 	"encoding/json"
 	"errors"
@@ -25,6 +26,7 @@ type options struct {
 	writeStyle    bool
 	skipFailures  bool
 	forceEPSG4326 bool
+	svgDir        string
 }
 
 func main() {
@@ -35,6 +37,7 @@ func main() {
 	flag.BoolVar(&opts.verbose, "v", false, "Verbose output")
 	flag.BoolVar(&opts.writeFGB, "write-fgb", true, "Write one FlatGeobuf output file per input layer")
 	flag.BoolVar(&opts.writeStyle, "write-style", true, "Prompt for each layer and write one shared .gen.maplibre.json stylesheet")
+	flag.StringVar(&opts.svgDir, "svg-dir", "", "Directory of SVG icons for point and stored line/polygon vertex styling")
 	flag.BoolVar(&opts.skipFailures, "skip-failures", false, "Skip feature conversion failures; skipped failures can produce incomplete output")
 	flag.BoolVar(&opts.forceEPSG4326, "force-epsg:4326", true, "Reproject coordinates and CRS metadata to EPSG:4326 regardless of stylesheet output; use --force-epsg:4326=false to preserve the original CRS. Regenerate existing projected FGB files for the web app")
 
@@ -63,11 +66,19 @@ func run(opts options, in io.Reader, out io.Writer) (err error) {
 	if err := validate.Format(validate.StyleFormat(opts.format)); err != nil {
 		return err
 	}
+	var icons map[string]svg.Svg
+	if opts.svgDir != "" {
+		icons, err = svg.ReadSvgs(opts.svgDir)
+		if err != nil {
+			return fmt.Errorf("read SVG directory: %w", err)
+		}
+	}
 
 	output, err := resolveOutput(opts.input, opts.output)
 	if err != nil {
 		return err
 	}
+
 	if opts.verbose {
 		_, _ = fmt.Fprintln(out, "gfp: converting every GML layer to FlatGeobuf...")
 	}
@@ -87,37 +98,54 @@ func run(opts options, in io.Reader, out io.Writer) (err error) {
 	if err != nil {
 		return err
 	}
+
 	names := make([]string, len(files))
 	for i, file := range files {
 		names[i] = file.LayerName
+
 		if opts.verbose {
 			_, _ = fmt.Fprintf(out, "gfp: layer %q loaded into memory\n%s\n", file.LayerName, fgb.InspectFgb(layers[i]))
 		}
 	}
 
 	paths := layerOutputPaths(output, names)
+	outputLayers := append([]*fgb.Fgb(nil), layers...)
 	var styleJSON []byte
 	if opts.writeStyle {
 		scanner := cli.NewScanner(in)
 		inputs := make([]maplibre.LayerStyle, len(layers))
+
 		for i, data := range layers {
 			inputs[i] = maplibre.LayerStyle{Data: data, SourceID: strings.TrimSuffix(filepath.Base(paths[i]), filepath.Ext(paths[i]))}
+
 			if len(data.Features) == 0 {
 				continue
 			}
+
 			if _, err := fmt.Fprintf(out, "\nLayer %q (%s)\n", names[i], filepath.Base(paths[i])); err != nil {
 				return fmt.Errorf("layer %q: %w", names[i], err)
 			}
-			field, styles, err := cli.PromptStyleWithScanner(data, scanner, out)
+
+			field, styles, err := cli.PromptStyleWithScanner(data, scanner, out, cli.StyleOptions{Icons: icons, WriteFGB: opts.writeFGB})
 			if err != nil {
 				return fmt.Errorf("layer %q: %w", names[i], err)
 			}
+
 			inputs[i].CategoryField, inputs[i].Styles = field, styles
 		}
-		mapStyle, err := maplibre.BuildMapLibreCollectionStyle(filepath.Base(output), inputs)
+		if opts.writeFGB {
+			for i := range inputs {
+				outputLayers[i], err = maplibre.PrepareVertexCompanions(&inputs[i])
+				if err != nil {
+					return fmt.Errorf("layer %q companions: %w", names[i], err)
+				}
+			}
+		}
+		mapStyle, err := maplibre.BuildMapLibreCollectionStyle(filepath.Base(output), inputs, icons)
 		if err != nil {
 			return fmt.Errorf("build MapLibre style: %w", err)
 		}
+
 		styleJSON, err = json.MarshalIndent(mapStyle, "", "  ")
 		if err != nil {
 			return fmt.Errorf("marshal MapLibre style: %w", err)
@@ -132,9 +160,16 @@ func run(opts options, in io.Reader, out io.Writer) (err error) {
 
 	if opts.writeFGB {
 		for i, file := range files {
-			if err := convert.WriteFgb(file, paths[i]); err != nil {
-				return fmt.Errorf("write layer %q: %w", file.LayerName, err)
+			var writeErr error
+			if outputLayers[i] != layers[i] {
+				writeErr = fgb.WriteFgb(outputLayers[i], paths[i])
+			} else {
+				writeErr = convert.WriteFgb(file, paths[i])
 			}
+			if writeErr != nil {
+				return fmt.Errorf("write layer %q: %w", file.LayerName, writeErr)
+			}
+
 			if opts.verbose {
 				_, _ = fmt.Fprintln(out, "gfp: FlatGeobuf written to", paths[i])
 			}
@@ -146,6 +181,7 @@ func run(opts options, in io.Reader, out io.Writer) (err error) {
 		if err := os.WriteFile(styleOutput, styleJSON, 0o644); err != nil {
 			return fmt.Errorf("write MapLibre style: %w", err)
 		}
+
 		if opts.verbose {
 			_, _ = fmt.Fprintln(out, "gfp: MapLibre style written to", styleOutput)
 		}
@@ -155,16 +191,19 @@ func run(opts options, in io.Reader, out io.Writer) (err error) {
 
 func loadLayers(files []*convert.MemoryFGB) ([]*fgb.Fgb, error) {
 	layers := make([]*fgb.Fgb, 0, len(files))
+
 	for _, file := range files {
 		src, err := file.OpenReader()
 		if err != nil {
 			return nil, fmt.Errorf("open layer %q: %w", file.LayerName, err)
 		}
+
 		// LoadFgb closes the reader, including on failure.
 		data, err := fgb.LoadFgb(src)
 		if err != nil {
 			return nil, fmt.Errorf("load layer %q: %w", file.LayerName, err)
 		}
+
 		layers = append(layers, data)
 	}
 	return layers, nil

@@ -17,8 +17,10 @@ var RenderTypes = map[GeometryType][]string{
 }
 
 type RenderLayerStyle struct {
-	Type  string
-	Paint Paint
+	Type     string
+	Paint    Paint
+	Layout   map[string]any
+	IconName string
 }
 
 type StyleGroup struct {
@@ -36,10 +38,11 @@ type StyleLayer struct {
 }
 
 type StyleHeader struct {
-	Version int                       `json:"version"`
-	Name    string                    `json:"name"`
-	Center  []float64                 `json:"center,omitempty"`
-	Zoom    float64                   `json:"zoom,omitempty"`
-	Sources map[string]map[string]any `json:"sources"`
-	Layers  []StyleLayer              `json:"layers"`
+	Metadata map[string]any            `json:"metadata,omitempty"`
+	Version  int                       `json:"version"`
+	Name     string                    `json:"name"`
+	Center   []float64                 `json:"center,omitempty"`
+	Zoom     float64                   `json:"zoom,omitempty"`
+	Sources  map[string]map[string]any `json:"sources"`
+	Layers   []StyleLayer              `json:"layers"`
 }

@@ -1,10 +1,175 @@
 # GeoFlatpack web
 
-A single fullscreen MapLibre map built with React, TypeScript, and Vite.
+A fullscreen MapLibre viewer built with React, TypeScript, and Vite.
 
-## Getting started
+[Live demo](https://gorilla-mode.github.io/GeoFlatpack/) · [CLI usage](../README.md#usage) · [Sample data](../test_data/)
 
-Install a current Node.js LTS release, then from the repository root:
+| Command           | Purpose                                              |
+|-------------------|------------------------------------------------------|
+| `npm run dev`     | Start the development server                         |
+| `npm test`        | Check decoding and style validation (Node.js 22.18+) |
+| `npm run build`   | Check TypeScript and build into `dist/`              |
+| `npm run preview` | Serve the production build locally                   |
+
+## Using the map
+
+Skytefelt areas loads and is selected by default. Other built-in sources are Sample obstacles, Brannstasjoner, and Skytefelt boundaries. Sources load when enabled and remain in memory.
+
+- **Upload files:** Choose one or more `.fgb` files and one matching JSON stylesheet per batch. New layers are added and centered; invalid batches leave existing layers unchanged.
+- **Select sources:** Toggle visibility, assign compatible stylesheets, inspect a source, or retry a failed load.
+- **Layer order:** The bottom-left panel lists active sources only. Drag handles or use the arrows; top rows draw above lower rows.
+- **Inspect:** Select a source to view its Header, GeoJSON, or Map Style. Loaded sources remain inspectable when hidden.
+- **Center on bbox:** Fit all visible datasets. Enabling a source centers on its bounds.
+- **Feature details:** Click a feature to see its source and properties.
+
+Use Tab to navigate controls, Space to toggle checkboxes, and Escape to close panels. Files stay in your browser; uploads and settings reset on reload.
+
+## Stylesheets
+
+Each FGB filename without its extension must match a GeoJSON source key and at least one layer's `source` in the stylesheet. For example, `sample-obstacles.fgb` matches `sample-obstacles`.
+
+Only layers using the matching source render; backgrounds and unrelated sources are skipped. Shared stylesheets and duplicate filenames can coexist. Upload labels include the batch number.
+
+### SVG icons
+
+See the [sample stylesheet](../test_data/sample-obstacles.maplibre.json) for a complete example.
+
+- Store inline SVG strings by name in the stylesheet's `metadata["geoflatpack:icons"]`.
+- Reference a name with a symbol layer's `layout["icon-image"]`, such as `"star"`. Use `icon-size` to scale it.
+- For polygon or line vertices, prepare MultiPoint companion features in the FGB before loading, copying the original attributes and assigning distinct feature IDs. Omit the polygon ring's repeated closing coordinate. Use `symbol-placement: "point"` and filter on Point geometry and the appropriate properties; MapLibre's Point filter also matches MultiPoint features.
+
+The `geoflatpack:icons` metadata key is a GeoFlatpack extension. The loader supports inline SVGs and literal icon names, not external paths, sprite atlases, or expression-based icon lookup. Failed icons report an error while geometry and valid icons remain visible.
+
+The sample stores four building corners and three power-line vertices alongside the original polygon, line, and street-light point. All features render from the decoded FGB source, so popups use the stored properties and inspectors include the MultiPoint companions. The browser does not generate vertex geometry. These companions are manually prepared; automatic, style-driven generation is deferred to a future CLI change.
+
+
+## Usage
+
+This single-dataset example follows the demo's loading steps. In a separate Vite page, add a map container and combine the TypeScript snippets below into `web/src/example.ts`. The imports use the existing demo dependencies and sample files.
+
+```html
+<div id="map" style="width: 100%; height: 100vh"></div>
+<script type="module" src="./src/example.ts"></script>
+```
+
+### 1. Create the map
+
+Load MapLibre's CSS and worker, then wait for the basemap before adding overlays. The helper functions called here are defined in the following steps.
+
+```ts
+import { Map as MapLibreMap, NavigationControl, setWorkerUrl } from 'maplibre-gl';
+import type { LayerSpecification, StyleSpecification } from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
+import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+import { deserialize } from 'flatgeobuf/lib/mjs/geojson.js';
+import type { FeatureCollection } from 'geojson';
+import fgbUrl from '../../test_data/sample-obstacles.fgb?url';
+import styleJson from '../../test_data/sample-obstacles.maplibre.json';
+
+const stylesheet = styleJson as unknown as StyleSpecification;
+const sourceId = 'sample-obstacles'; // Original filename without .fgb, not Vite's hashed URL.
+setWorkerUrl(workerUrl);
+const map = new MapLibreMap({
+  container: 'map',
+  style: 'https://tiles.openfreemap.org/styles/liberty',
+  center: stylesheet.center,
+  zoom: stylesheet.zoom,
+});
+map.addControl(new NavigationControl());
+map.on('error', event => console.error(event.error));
+map.once('load', () => { void addOverlay().catch(console.error); });
+```
+
+### 2. Decode the FGB into GeoJSON
+
+MapLibre's GeoJSON source needs decoded features, rather than the FGB URL.
+
+```ts
+async function loadData(): Promise<FeatureCollection> {
+  const response = await fetch(fgbUrl);
+  if (!response.ok) throw new Error(`Unable to load FGB: HTTP ${response.status}`);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  const data: FeatureCollection = { type: 'FeatureCollection', features: [] };
+  for await (const feature of deserialize(bytes)) {
+    feature.id ??= data.features.length;
+    data.features.push(feature);
+  }
+  return data;
+}
+```
+
+### 3. Register the embedded SVGs
+
+Decode each SVG through a browser image, then register it before adding symbol layers. Track failed icons so their references can be omitted while geometry still renders.
+
+```ts
+async function loadIcons(): Promise<Map<string, string | null>> {
+  const ids = new Map<string, string | null>();
+  const metadata = stylesheet.metadata;
+  const icons = metadata && typeof metadata === 'object' && 'geoflatpack:icons' in metadata
+    ? metadata['geoflatpack:icons'] : undefined;
+  if (!icons || typeof icons !== 'object' || Array.isArray(icons)) return ids;
+
+  for (const [name, svg] of Object.entries(icons)) {
+    let url: string | undefined;
+    try {
+      if (typeof svg !== 'string') throw new Error('Expected an inline SVG string.');
+      url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      if (!image.naturalWidth || !image.naturalHeight) throw new Error('SVG has no size.');
+      const id = `${sourceId}-icon-${encodeURIComponent(name)}`;
+      map.addImage(id, image, { pixelRatio: 1, sdf: false });
+      if (!map.hasImage(id)) throw new Error('Unable to register image.');
+      ids.set(name, id);
+    } catch (error) {
+      ids.set(name, null);
+      console.error(`Icon "${name}" could not load:`, error);
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+    }
+  }
+  return ids;
+}
+```
+
+### 4. Add the source and styled layers
+
+The sample FGB already contains the MultiPoint features used for building and power-line stars. Add every decoded feature to one source; the stylesheet's geometry and `kind` filters select the features for each layer. Fill and line layers precede their corresponding star layers.
+
+```ts
+async function addOverlay() {
+  const data = await loadData();
+  const icons = await loadIcons();
+  const source = stylesheet.sources[sourceId];
+  if (!source || source.type !== 'geojson') throw new Error('Expected a matching GeoJSON source.');
+  map.addSource(sourceId, { ...source, data });
+
+  for (const layer of stylesheet.layers) {
+    if (!('source' in layer) || layer.source !== sourceId) continue;
+    let rendered: LayerSpecification = { ...layer, id: `${sourceId}-${layer.id}` };
+    if (rendered.type === 'symbol') {
+      const layout = { ...rendered.layout };
+      const name = layout['icon-image'];
+      if (typeof name === 'string' && icons.has(name)) {
+        const id = icons.get(name);
+        if (id) layout['icon-image'] = id;
+        else delete layout['icon-image'];
+      }
+      rendered = { ...rendered, layout };
+    }
+    map.addLayer(rendered);
+  }
+}
+```
+
+Layer order follows the stylesheet; backgrounds and other sources are skipped. SVG metadata is a GeoFlatpack convention implemented by this code. Vertex positions come directly from the stored MultiPoint features.
+
+For the full implementation—including validation, cancellation, cleanup, multiple datasets, and popups—see [App.tsx](src/App.tsx), [dataset.ts](src/dataset.ts), [styleIcons.ts](src/styleIcons.ts), and [mapLayers.ts](src/mapLayers.ts).
+
+## Local development
+Install a current Node.js LTS release, then run from the repository root:
 
 ```sh
 cd web
@@ -13,53 +178,3 @@ npm run dev
 ```
 
 Open the URL printed by Vite.
-
-## Scripts
-
-| Command           | Purpose                                                        |
-|-------------------|----------------------------------------------------------------|
-| `npm run dev`     | Start the development server                                   |
-| `npm test`        | Check file decoding and stylesheet validation (Node.js 22.18+) |
-| `npm run build`   | Check TypeScript and build the static app into `dist/`         |
-| `npm run preview` | Serve the production build locally                             |
-
-## Map data and styling
-
-| File                                                                                                                                                              | Purpose                                                   |
-|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------|
-| [`sample-obstacles.fgb`](../test_data/sample-obstacles.fgb)                                                                                                       | Decoded in the browser into a GeoJSON source              |
-| [`sample-obstacles.maplibre.json`](../test_data/sample-obstacles.maplibre.json)                                                                                   | Initial view, obstacle filters, and paint properties      |
-| [`Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb`](../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.fgb)                             | Brannstasjoner data decoded into a GeoJSON source         |
-| [`Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.gen.maplibre.json`](../test_data/Samfunnssikkerhet_0000_Norge_25833_Brannstasjoner_GML.gen.maplibre.json) | Generated filters and paint properties for Brannstasjoner |
-
-The two Skytefelt sources use `Forurensning_0000_Norge_3035_Skytefelt_GML.SkyteOg_vingsfelt.fgb` and `Forurensning_0000_Norge_3035_Skytefelt_GML.Skytefeltgrense.fgb`, with the shared `Forurensning_0000_Norge_3035_Skytefelt_GML.gen.maplibre.json` stylesheet.
-
-All built-in files are imported directly from `test_data/`. Vite bundles the three stylesheets and emits all four FGB files as production assets. Only sample obstacles loads initially; other sources load when enabled and stay available in memory. Layers, uploads, visibility, and stylesheet assignments are not saved between page loads.
-
-## Source, uploads, and inspectors
-
-| Concept            | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-|--------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Source name**    | FGB filename without extension, e.g. `sample-obstacles.fgb` → `sample-obstacles`. Must match the stylesheet's `sources` key and each layer's `source`. Update both the import path and stylesheet references when changing files. Asset hashes are separate.                                                                                                                                                                                                         |
-| **CLI output**     | Writes two files per input: `<output>/<input-name>.fgb` and `.gen.maplibre.json`. Default output dir uses the input name, e.g. `map.gml` → `map.fgb` + `map.gen.maplibre.json`. `-o /output/roads.fgb` writes to that dir as `roads.fgb` + `roads.gen.maplibre.json` (source `roads`). `-o .` writes named files to the current dir.                                                                                                                                 |
-| **Upload files** | Pick one or more local `.fgb` files and one matching `.json` stylesheet, then **Add layers**. Every file in the batch receives that stylesheet. Later batches can use other stylesheets. Uploads add visible layers alongside existing ones, center on the new batch, select its first layer for inspection, and open the source list. Files stay in the browser. Invalid files or mismatched sources reject the whole batch without changing existing layers or styles. |
-| **Select sources** | Check any combination of Sample obstacles, Brannstasjoner, Skytefelt areas, Skytefelt boundaries, and uploaded layers to show them together. Each row has a stylesheet selector listing compatible built-in and uploaded styles, plus an **Inspect** button. Changing a stylesheet updates only that layer; both Skytefelt layers initially share one style. Loading failures offer a retry for the affected source. Tab navigates controls, Space toggles checkboxes, and Escape closes the panel. |
-| **Inspect Header** | The row’s **Inspect** button selects the layer used by all three inspectors. Header shows the parsed header and expandable features; GeoJSON shows decoded data; Map Style shows the complete assigned stylesheet. Hidden layers remain inspectable after loading. An unloaded source opens its style inspector. A parsed header stays inspectable if decoding later fails. |
-
-Only style layers referencing the matching filename source render above the basemap; backgrounds and unrelated sources are skipped. Compatibility requires a matching GeoJSON source and at least one style layer using it. Runtime source and layer IDs are unique per dataset, so repeated filenames and shared styles can coexist. Uploaded layer and style labels include the batch number to distinguish them.
-
-Enabling a layer centers on its bounds. **Center on bbox** fits all visible datasets. Click a feature to see its source label and properties, including when datasets have overlapping feature IDs. The toolbar inspectors remain focused on the layer selected using **Inspect**.
-
-## Basemap
-
-[OpenFreeMap Liberty](https://openfreemap.org/quick_start/) (street names and places) needs internet. The sample style's background layer is skipped so it stays visible; obstacles render above it, and MapLibre handles the attribution.
-
-## GitHub Pages
-
-URL: https://gorilla-mode.github.io/GeoFlatpack/
-
-Once: repo **Settings → Pages → Source → GitHub Actions** ([docs](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)).
-
-The [workflow](../.github/workflows/deploy-pages.yml) runs on every push to `master`. Also runnable manually from **Actions → Deploy to GitHub Pages → Run workflow** with `master`. Uses Node.js 22, `npm ci`, a TS check, and a build. Before uploading `web/dist` it verifies the emitted obstacle and Brannstasjoner FGB files match their sources byte-for-byte and that CSS + MapLibre worker assets exist. Deployments run serially without cancelling active ones. The `github-pages` environment exposes the deployed URL.
-
-Vite paths support the `/GeoFlatpack/` host. All three stylesheets are bundled into the app; the four FGB files, CSS, and worker are emitted as assets. The workflow also copies the two Skytefelt FGB files and their shared stylesheet to `test_data/` in the published site, preserving their filenames. The basemap still needs internet.
