@@ -75,7 +75,7 @@ func newDetailKeyMap() detailKeyMap {
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
-			key.WithHelp("Control+C", "Exit GeoFlatpack immediately"),
+			key.WithHelp("Control+C", "Exit GeoFlatpack after active processing finishes"),
 		),
 		Select: key.NewBinding(
 			key.WithKeys("enter"),

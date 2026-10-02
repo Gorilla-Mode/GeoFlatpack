@@ -2,14 +2,26 @@ package tui
 
 import (
 	"GeoFlatpack/internal/app"
+	"errors"
 	"io"
 
 	tea "charm.land/bubbletea/v2"
 )
 
-// Run starts the scaffold on explicit streams. Bubble Tea restores the terminal
-// and leaves the alternate screen before Run returns, including on errors.
+// Run prepares input behind the loading screen on explicit streams and owns the
+// session until exit. Errors are returned after Bubble Tea restores the terminal
+// and preparation has finished and released its resources.
 func Run(opts app.Options, in io.Reader, out io.Writer) error {
-	_, err := tea.NewProgram(NewModel(opts), tea.WithInput(in), tea.WithOutput(out)).Run()
+	return runModel(NewModel(opts), in, out)
+}
+
+func runModel(model Model, in io.Reader, out io.Writer, options ...tea.ProgramOption) (err error) {
+	defer func() {
+		err = errors.Join(err, model.preparation.finish())
+	}()
+
+	options = append(options, tea.WithInput(in), tea.WithOutput(out))
+	_, err = tea.NewProgram(model, options...).Run()
+
 	return err
 }
