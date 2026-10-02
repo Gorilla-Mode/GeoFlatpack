@@ -327,7 +327,8 @@ func promptIcon(icons map[string]svg.Svg, scanner *bufio.Scanner, out io.Writer)
 			return "", nil, err
 		}
 	}
-	ignorePlacment := true
+	
+	ignorePlacement := false
 	for {
 		input, err := promptLine(scanner, out, "WARNING: More performance intensive .\nIgnore icon placement [false]:")
 		if err != nil {
@@ -340,7 +341,7 @@ func promptIcon(icons map[string]svg.Svg, scanner *bufio.Scanner, out io.Writer)
 
 		value, err := strconv.ParseBool(input)
 		if err == nil {
-			ignorePlacment = value
+			ignorePlacement = value
 			break
 		}
 
@@ -353,7 +354,7 @@ func promptIcon(icons map[string]svg.Svg, scanner *bufio.Scanner, out io.Writer)
 		"icon-image":            name,
 		"icon-size":             size,
 		"icon-allow-overlap":    overlap,
-		"icon-ignore-placement": ignorePlacment,
+		"icon-ignore-placement": ignorePlacement,
 		"symbol-placement":      "point",
 	}, nil
 }
