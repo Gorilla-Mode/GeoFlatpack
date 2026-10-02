@@ -7,6 +7,19 @@ GeoFlatpack converts each layer in a `.gml` file into its own FlatGeobuf file an
 - Go 1.27 or later
 - GDAL development libraries with GML and FlatGeobuf support (`gdal-config` available)
 
+## Web example
+
+### Live demo
+
+> Live demo uses the .fgb and .json files in the `test_data` directory.
+
+[Open the live demo](https://gorilla-mode.github.io/GeoFlatpack/)
+
+### Further docs
+
+The `web/` directory contains a browser-based MapLibre example. See the [web README](web/README.md) for setup and app details.
+
+
 ## Usage
 
 ### Compile
@@ -84,18 +97,6 @@ For example, from the `GeoFlatpack/` directory:
 
 The stylesheet always uses the **`.gen` tag** and has one source per FGB, with IDs set to the final filenames without `.fgb`.
 Sources are empty GeoJSON placeholders for the consuming application to populate.
-
-## Web example
-
-### Live demo
-
-> Live demo uses the .fgb and .json files in the `test_data` directory.
-
-[Open the live demo](https://gorilla-mode.github.io/GeoFlatpack/)
-
-### Further docs
-
-The `web/` directory contains a browser-based MapLibre example. See the [web README](web/README.md) for setup and app details.
 
 ## Dependencies
 
