@@ -19,6 +19,7 @@ func promptLine(
 	prompt string,
 ) (string, error) {
 	line, err := promptRawLine(scanner, out, prompt)
+
 	return strings.TrimSpace(line), err
 }
 
@@ -37,6 +38,7 @@ func promptRawLine(
 	if err := scanner.Err(); err != nil {
 		return "", err
 	}
+
 	return "", fmt.Errorf("input ended while waiting for an answer: %w", io.EOF)
 }
 
@@ -55,6 +57,7 @@ func PromptStyles(
 	if len(options) > 0 {
 		opts = options[0]
 	}
+
 	spec, err := maplibre.LoadSpec()
 	if err != nil {
 		return nil, err
@@ -66,11 +69,13 @@ func PromptStyles(
 			return nil, err
 		}
 	}
+
 	for _, group := range groups {
 		types := append([]string(nil), maplibre.RenderTypes[group.GeometryType]...)
 		if len(types) == 0 {
 			return nil, fmt.Errorf("unsupported geometry: %s", group.GeometryType)
 		}
+
 		if len(opts.Icons) > 0 {
 			if group.GeometryType == maplibre.Point || opts.WriteFGB {
 				types = append(types, "SVG icon")
@@ -327,7 +332,8 @@ func promptIcon(icons map[string]svg.Svg, scanner *bufio.Scanner, out io.Writer)
 			return "", nil, err
 		}
 	}
-	ignorePlacment := true
+
+	ignorePlacement := false
 	for {
 		input, err := promptLine(scanner, out, "WARNING: More performance intensive .\nIgnore icon placement [false]:")
 		if err != nil {
@@ -340,7 +346,7 @@ func promptIcon(icons map[string]svg.Svg, scanner *bufio.Scanner, out io.Writer)
 
 		value, err := strconv.ParseBool(input)
 		if err == nil {
-			ignorePlacment = value
+			ignorePlacement = value
 			break
 		}
 
@@ -353,7 +359,7 @@ func promptIcon(icons map[string]svg.Svg, scanner *bufio.Scanner, out io.Writer)
 		"icon-image":            name,
 		"icon-size":             size,
 		"icon-allow-overlap":    overlap,
-		"icon-ignore-placement": ignorePlacment,
+		"icon-ignore-placement": ignorePlacement,
 		"symbol-placement":      "point",
 	}, nil
 }
