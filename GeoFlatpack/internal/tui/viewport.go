@@ -10,6 +10,10 @@ func (m *Model) refreshViewport() {
 	l := m.layout()
 	m.viewport.SetWidth(l.contentWidth)
 	m.viewport.SetHeight(l.contentHeight)
+	if m.screen == scaffoldScreen && !m.help.ShowAll {
+		m.viewport.SetContent("")
+		return
+	}
 	content := m.body(l.contentWidth)
 
 	if m.help.ShowAll {
@@ -22,7 +26,7 @@ func (m *Model) refreshViewport() {
 
 func (m *Model) body(width int) string {
 	if m.screen == scaffoldScreen {
-		return panel.Scaffold()
+		return ""
 	}
 
 	opts := panel.ProcessingOptions{

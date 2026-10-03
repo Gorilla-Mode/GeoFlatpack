@@ -3,6 +3,7 @@ package tui
 
 import (
 	"GeoFlatpack/internal/app"
+	"GeoFlatpack/internal/tui/panel"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -34,6 +35,7 @@ type Model struct {
 	spinner     spinner.Model
 	viewport    viewport.Model
 	screen      screen
+	activePane  panel.Pane
 	startedAt   time.Time
 	elapsed     time.Duration
 	quitting    bool
@@ -108,6 +110,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.Select) && m.screen == completionScreen:
 			m.screen = scaffoldScreen
+			m.activePane = panel.LayerPane
 			m.viewport.GotoTop()
 			m.help.ShowAll = false
 			m.keys.Help.SetHelp("?", "help")
@@ -119,9 +122,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.keys.Help.SetHelp("?", "help")
 			}
+		case key.Matches(msg, m.keys.RightPane) && m.screen == scaffoldScreen && !m.help.ShowAll:
+			m.activePane = (m.activePane + 1) % panel.PaneCount
+		case key.Matches(msg, m.keys.LeftPane) && m.screen == scaffoldScreen && !m.help.ShowAll:
+			m.activePane = (m.activePane + panel.PaneCount - 1) % panel.PaneCount
 		default:
-			m.refreshViewport()
-			m.viewport, cmd = m.viewport.Update(msg)
+			if m.help.ShowAll || m.screen != scaffoldScreen {
+				m.refreshViewport()
+				m.viewport, cmd = m.viewport.Update(msg)
+			}
 		}
 	}
 	m.refreshViewport()

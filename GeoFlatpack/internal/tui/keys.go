@@ -29,12 +29,14 @@ func newKeyMap() keyMap {
 			key.WithHelp("↵", "Select"),
 		),
 		LeftPane: key.NewBinding(
-			key.WithKeys("super+left", "ctrl+left"),
-			key.WithHelp("⌘←", "Left pane"),
+			// Ghostty's macOS Option+Left binding sends Escape+b (Alt+b).
+			key.WithKeys("alt+left", "alt+b", "ctrl+left"),
+			key.WithHelp("⌥←", "Left pane"),
 		),
 		RightPane: key.NewBinding(
-			key.WithKeys("super+right", "ctrl+right"),
-			key.WithHelp("⌘→", "Right pane"),
+			// Ghostty's macOS Option+Right binding sends Escape+f (Alt+f).
+			key.WithKeys("alt+right", "alt+f", "ctrl+right"),
+			key.WithHelp("⌥→", "Right pane"),
 		),
 		SelectionUp: key.NewBinding(
 			key.WithKeys("up"),
@@ -82,12 +84,12 @@ func newDetailKeyMap() detailKeyMap {
 			key.WithHelp("Enter", "Primary action. Selects the current item, enters field, etc."),
 		),
 		LeftPane: key.NewBinding(
-			key.WithKeys("super+left", "ctrl+left"),
-			key.WithHelp("Super+Left / Control+Left", "Move to the left pane"),
+			key.WithKeys("alt+left", "alt+b", "ctrl+left"),
+			key.WithHelp("Option/Alt+Left / Control+Left", "Move to the left pane"),
 		),
 		RightPane: key.NewBinding(
-			key.WithKeys("super+right", "ctrl+right"),
-			key.WithHelp("Super+Right / Control+Right", "Move to the right pane"),
+			key.WithKeys("alt+right", "alt+f", "ctrl+right"),
+			key.WithHelp("Option/Alt+Right / Control+Right", "Move to the right pane"),
 		),
 		SelectionUp: key.NewBinding(
 			key.WithKeys("up"),

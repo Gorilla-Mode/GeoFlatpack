@@ -5,6 +5,17 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+const (
+	colorAccent            = "6"
+	colorBorder            = "240"
+	colorMuted             = "244"
+	colorSuccess           = "2"
+	colorFailure           = "1"
+	colorElapsedBackground = "236"
+	colorSelectedPane      = "252"
+	colorInactivePane      = "248"
+)
+
 type styles struct {
 	frame   lipgloss.Style
 	box     lipgloss.Style
@@ -14,6 +25,11 @@ type styles struct {
 	failure lipgloss.Style
 	elapsed lipgloss.Style
 	help    help.Styles
+
+	pane              lipgloss.Style
+	inactivePane      lipgloss.Style
+	paneTitle         lipgloss.Style
+	inactivePaneTitle lipgloss.Style
 }
 
 func newStyles() styles {
@@ -23,31 +39,33 @@ func newStyles() styles {
 	dim := lipgloss.NewStyle().
 		Faint(true)
 
+	box := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(colorBorder)).
+		Padding(0, 1)
+
 	return styles{
 		frame: lipgloss.NewStyle().
 			Padding(1, 2),
 
-		box: lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("240")).
-			Padding(0, 1),
+		box: box,
 
 		title: lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("6")),
+			Foreground(lipgloss.Color(colorAccent)),
 
-		muted: dim.Foreground(lipgloss.Color("244")),
+		muted: dim.Foreground(lipgloss.Color(colorMuted)),
 
 		success: lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color("2")),
+			Foreground(lipgloss.Color(colorSuccess)),
 
 		failure: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("1")),
+			Foreground(lipgloss.Color(colorFailure)),
 
 		elapsed: lipgloss.NewStyle().
-			Foreground(lipgloss.Color("6")).
-			Background(lipgloss.Color("236")).
+			Foreground(lipgloss.Color(colorAccent)).
+			Background(lipgloss.Color(colorElapsedBackground)).
 			Padding(0, 1),
 
 		help: help.Styles{
@@ -59,5 +77,13 @@ func newStyles() styles {
 			FullDesc:       dim,
 			FullSeparator:  dim,
 		},
+
+		pane:         box.BorderForeground(lipgloss.Color(colorSelectedPane)),
+		inactivePane: box.BorderForeground(lipgloss.Color(colorInactivePane)),
+		paneTitle: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(colorSelectedPane)),
+		inactivePaneTitle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colorInactivePane)),
 	}
 }
