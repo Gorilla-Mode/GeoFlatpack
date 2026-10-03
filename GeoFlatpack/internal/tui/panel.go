@@ -33,12 +33,7 @@ func (m *Model) panel() string {
 		}
 
 		if scaffold {
-			sections = append(sections, panel.Scaffold(panel.ScaffoldOptions{
-				Width: l.width, Height: l.bodyHeight, ActivePane: m.activePane,
-				PaneStyle:         m.styles.pane,
-				InactivePaneStyle: m.styles.inactivePane,
-				TitleStyle:        m.styles.paneTitle, MutedStyle: m.styles.inactivePaneTitle,
-			}))
+			sections = append(sections, panel.Scaffold(m.scaffoldOptions(l)))
 		} else {
 			sections = append(sections, panel.Body(panel.BodyOptions{
 				Style:         l.bodyStyle,
@@ -70,4 +65,15 @@ func (m *Model) panel() string {
 
 	// Lip Gloss v2 dimensions include both padding and borders.
 	return l.frame.PaddingBottom(0).Width(m.width).Height(m.height).Render(strings.Join(sections, "\n"))
+}
+
+func (m *Model) scaffoldOptions(l panelLayout) panel.ScaffoldOptions {
+	return panel.ScaffoldOptions{
+		Width: l.width, Height: l.bodyHeight, ActivePane: m.activePane,
+		PaneStyle: m.styles.pane, InactivePaneStyle: m.styles.inactivePane,
+		TitleStyle: m.styles.paneTitle, MutedStyle: m.styles.inactivePaneTitle,
+		SuccessStyle:   m.styles.success,
+		LayerItemStyle: m.styles.layerItem,
+		Layers:         m.layers, SelectedLayer: m.selectedLayer, FirstVisibleLayer: m.firstVisibleLayer,
+	}
 }

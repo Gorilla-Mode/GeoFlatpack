@@ -11,6 +11,7 @@ func (m *Model) refreshViewport() {
 	m.viewport.SetWidth(l.contentWidth)
 	m.viewport.SetHeight(l.contentHeight)
 	if m.screen == scaffoldScreen && !m.help.ShowAll {
+		m.firstVisibleLayer = panel.LayerWindow(m.scaffoldOptions(l))
 		m.viewport.SetContent("")
 		return
 	}

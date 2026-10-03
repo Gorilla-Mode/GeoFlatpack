@@ -27,6 +27,11 @@ type ScaffoldOptions struct {
 	InactivePaneStyle lipgloss.Style
 	TitleStyle        lipgloss.Style
 	MutedStyle        lipgloss.Style
+	SuccessStyle      lipgloss.Style
+	LayerItemStyle    lipgloss.Style
+	Layers            []LayerItem
+	SelectedLayer     int
+	FirstVisibleLayer int
 }
 
 type paneSize struct {
@@ -97,7 +102,11 @@ func Scaffold(opts ScaffoldOptions) string {
 		if pane == opts.ActivePane {
 			box, title = opts.PaneStyle, opts.TitleStyle
 		}
-		return renderPane(paneOptions{size: size, heading: heading, box: box, title: title})
+		paneOpts := paneOptions{size: size, heading: heading, box: box, title: title}
+		if pane == LayerPane {
+			paneOpts.content = renderLayers(opts, paneInterior(size, box))
+		}
+		return renderPane(paneOpts)
 	}
 
 	preview := renderPreviewControls(opts, l)
@@ -141,16 +150,26 @@ func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {
 	return renderPane(preview) + "\n" + renderPane(controls)
 }
 
+func paneBox(size paneSize, style lipgloss.Style) lipgloss.Style {
+	box := style.Padding(0)
+	if size.width < box.GetHorizontalFrameSize()+1 || size.height < box.GetVerticalFrameSize()+1 {
+		// Drop outlines when they would leave no room for a heading.
+		box = box.Border(lipgloss.RoundedBorder(), false)
+	}
+	return box
+}
+
+func paneInterior(size paneSize, style lipgloss.Style) paneSize {
+	box := paneBox(size, style)
+	return paneSize{max(0, size.width-box.GetHorizontalFrameSize()), max(0, size.height-box.GetVerticalFrameSize())}
+}
+
 func renderPane(opts paneOptions) string {
 	if opts.size.width <= 0 || opts.size.height <= 0 {
 		return ""
 	}
-	box := opts.box.Padding(0)
-	if opts.size.width < box.GetHorizontalFrameSize()+1 || opts.size.height < box.GetVerticalFrameSize()+1 {
-		// Drop outlines when they would leave no room for a heading.
-		box = box.Border(lipgloss.RoundedBorder(), false)
-	}
-	interior := paneSize{opts.size.width - box.GetHorizontalFrameSize(), opts.size.height - box.GetVerticalFrameSize()}
+	box := paneBox(opts.size, opts.box)
+	interior := paneInterior(opts.size, opts.box)
 
 	rows := make([]string, interior.height)
 	inset := 0

@@ -14,6 +14,7 @@ const (
 	colorElapsedBackground = "236"
 	colorSelectedPane      = "252"
 	colorInactivePane      = "248"
+	colorLayerBackground   = "236"
 )
 
 type styles struct {
@@ -30,6 +31,7 @@ type styles struct {
 	inactivePane      lipgloss.Style
 	paneTitle         lipgloss.Style
 	inactivePaneTitle lipgloss.Style
+	layerItem         lipgloss.Style
 }
 
 func newStyles() styles {
@@ -85,5 +87,7 @@ func newStyles() styles {
 			Foreground(lipgloss.Color(colorSelectedPane)),
 		inactivePaneTitle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(colorInactivePane)),
+		layerItem: lipgloss.NewStyle().
+			Background(lipgloss.Color(colorLayerBackground)),
 	}
 }

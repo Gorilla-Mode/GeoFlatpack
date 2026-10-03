@@ -25,23 +25,26 @@ const (
 // Model retains the loaded session for future processing screens. Run owns its
 // preparation and cleanup lifecycle.
 type Model struct {
-	Options     app.Options
-	help        help.Model
-	keys        keyMap
-	detailKeys  detailKeyMap
-	styles      styles
-	width       int
-	height      int
-	spinner     spinner.Model
-	viewport    viewport.Model
-	screen      screen
-	activePane  panel.Pane
-	startedAt   time.Time
-	elapsed     time.Duration
-	quitting    bool
-	err         error
-	session     loadedSession
-	preparation *preparation
+	Options           app.Options
+	help              help.Model
+	keys              keyMap
+	detailKeys        detailKeyMap
+	styles            styles
+	width             int
+	height            int
+	spinner           spinner.Model
+	viewport          viewport.Model
+	screen            screen
+	activePane        panel.Pane
+	layers            []panel.LayerItem
+	selectedLayer     int
+	firstVisibleLayer int
+	startedAt         time.Time
+	elapsed           time.Duration
+	quitting          bool
+	err               error
+	session           loadedSession
+	preparation       *preparation
 }
 
 var _ tea.Model = (*Model)(nil)
@@ -90,6 +93,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = failureScreen
 		} else {
 			m.session = msg.session
+			m.layers = nil
+			if m.session != nil {
+				for _, layer := range m.session.Layers() {
+					item := panel.LayerItem{Name: layer.Name}
+					if layer.Data != nil {
+						item.FeatureCount = len(layer.Data.Features)
+					}
+					m.layers = append(m.layers, item)
+				}
+			}
 			m.screen = completionScreen
 		}
 		m.viewport.GotoTop()
@@ -111,6 +124,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Select) && m.screen == completionScreen:
 			m.screen = scaffoldScreen
 			m.activePane = panel.LayerPane
+			m.selectedLayer, m.firstVisibleLayer = 0, 0
 			m.viewport.GotoTop()
 			m.help.ShowAll = false
 			m.keys.Help.SetHelp("?", "help")
@@ -126,6 +140,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activePane = (m.activePane + 1) % panel.PaneCount
 		case key.Matches(msg, m.keys.LeftPane) && m.screen == scaffoldScreen && !m.help.ShowAll:
 			m.activePane = (m.activePane + panel.PaneCount - 1) % panel.PaneCount
+		case key.Matches(msg, m.keys.SelectionUp) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.LayerPane:
+			m.selectedLayer = max(0, m.selectedLayer-1)
+		case key.Matches(msg, m.keys.SelectionDown) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.LayerPane:
+			m.selectedLayer = min(max(0, len(m.layers)-1), m.selectedLayer+1)
 		default:
 			if m.help.ShowAll || m.screen != scaffoldScreen {
 				m.refreshViewport()
