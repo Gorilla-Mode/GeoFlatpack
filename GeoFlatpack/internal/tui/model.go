@@ -36,7 +36,7 @@ type Model struct {
 	viewport          viewport.Model
 	screen            screen
 	activePane        panel.Pane
-	layers            []panel.LayerItem
+	layers            []panel.ListItem
 	selectedLayer     int
 	firstVisibleLayer int
 	startedAt         time.Time
@@ -95,13 +95,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.session = msg.session
 			m.layers = nil
 			if m.session != nil {
-				for _, layer := range m.session.Layers() {
-					item := panel.LayerItem{Name: layer.Name}
-					if layer.Data != nil {
-						item.FeatureCount = len(layer.Data.Features)
-					}
-					m.layers = append(m.layers, item)
-				}
+				m.layers = layerItems(m.session.Layers())
 			}
 			m.screen = completionScreen
 		}
@@ -141,9 +135,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.LeftPane) && m.screen == scaffoldScreen && !m.help.ShowAll:
 			m.activePane = (m.activePane + panel.PaneCount - 1) % panel.PaneCount
 		case key.Matches(msg, m.keys.SelectionUp) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.LayerPane:
-			m.selectedLayer = max(0, m.selectedLayer-1)
+			m.selectedLayer = panel.MoveListSelection(m.selectedLayer, -1, len(m.layers))
 		case key.Matches(msg, m.keys.SelectionDown) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.LayerPane:
-			m.selectedLayer = min(max(0, len(m.layers)-1), m.selectedLayer+1)
+			m.selectedLayer = panel.MoveListSelection(m.selectedLayer, 1, len(m.layers))
+		case key.Matches(msg, m.keys.Select) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.LayerPane && len(m.layers) > 0:
+			if m.layers[m.selectedLayer].Status == panel.ListUnopened {
+				m.layers[m.selectedLayer].Status = panel.ListIncomplete
+			}
+			m.activePane = panel.CategoryPane
 		default:
 			if m.help.ShowAll || m.screen != scaffoldScreen {
 				m.refreshViewport()

@@ -1,20 +1,24 @@
 package tui
 
 import (
+	"GeoFlatpack/internal/tui/panel"
+
 	"charm.land/bubbles/v2/help"
 	"charm.land/lipgloss/v2"
 )
 
 const (
-	colorAccent            = "6"
-	colorBorder            = "240"
-	colorMuted             = "244"
-	colorSuccess           = "2"
-	colorFailure           = "1"
-	colorElapsedBackground = "236"
-	colorSelectedPane      = "252"
-	colorInactivePane      = "248"
-	colorLayerBackground   = "236"
+	colorAccent                 = "6"
+	colorBorder                 = "240"
+	colorMuted                  = "244"
+	colorSuccess                = "2"
+	colorFailure                = "1"
+	colorElapsedBackground      = "236"
+	colorSelectedPane           = "252"
+	colorInactivePane           = "248"
+	colorListBackground         = "234"
+	colorSelectedListBackground = "236"
+	colorIncomplete             = "3"
 )
 
 type styles struct {
@@ -31,7 +35,7 @@ type styles struct {
 	inactivePane      lipgloss.Style
 	paneTitle         lipgloss.Style
 	inactivePaneTitle lipgloss.Style
-	layerItem         lipgloss.Style
+	list              panel.ListStyles
 }
 
 func newStyles() styles {
@@ -87,7 +91,15 @@ func newStyles() styles {
 			Foreground(lipgloss.Color(colorSelectedPane)),
 		inactivePaneTitle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(colorInactivePane)),
-		layerItem: lipgloss.NewStyle().
-			Background(lipgloss.Color(colorLayerBackground)),
+		list: panel.ListStyles{
+			Item:         lipgloss.NewStyle().Background(lipgloss.Color(colorListBackground)),
+			SelectedItem: lipgloss.NewStyle().Background(lipgloss.Color(colorSelectedListBackground)),
+			Name:         lipgloss.NewStyle().Foreground(lipgloss.Color(colorInactivePane)),
+			SelectedName: lipgloss.NewStyle().Foreground(lipgloss.Color(colorSelectedPane)).Bold(true),
+			Detail:       lipgloss.NewStyle().Foreground(lipgloss.Color(colorInactivePane)),
+			Unopened:     lipgloss.NewStyle().Foreground(lipgloss.Color(colorInactivePane)),
+			Incomplete:   lipgloss.NewStyle().Foreground(lipgloss.Color(colorIncomplete)),
+			Complete:     lipgloss.NewStyle().Foreground(lipgloss.Color(colorSuccess)).Bold(true),
+		},
 	}
 }

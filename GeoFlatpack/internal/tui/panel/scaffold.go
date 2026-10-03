@@ -27,9 +27,8 @@ type ScaffoldOptions struct {
 	InactivePaneStyle lipgloss.Style
 	TitleStyle        lipgloss.Style
 	MutedStyle        lipgloss.Style
-	SuccessStyle      lipgloss.Style
-	LayerItemStyle    lipgloss.Style
-	Layers            []LayerItem
+	ListStyles        ListStyles
+	Layers            []ListItem
 	SelectedLayer     int
 	FirstVisibleLayer int
 }
@@ -104,7 +103,7 @@ func Scaffold(opts ScaffoldOptions) string {
 		}
 		paneOpts := paneOptions{size: size, heading: heading, box: box, title: title}
 		if pane == LayerPane {
-			paneOpts.content = renderLayers(opts, paneInterior(size, box))
+			paneOpts.content = List(layerListOptions(opts, paneInterior(size, box)))
 		}
 		return renderPane(paneOpts)
 	}

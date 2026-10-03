@@ -72,8 +72,7 @@ func (m *Model) scaffoldOptions(l panelLayout) panel.ScaffoldOptions {
 		Width: l.width, Height: l.bodyHeight, ActivePane: m.activePane,
 		PaneStyle: m.styles.pane, InactivePaneStyle: m.styles.inactivePane,
 		TitleStyle: m.styles.paneTitle, MutedStyle: m.styles.inactivePaneTitle,
-		SuccessStyle:   m.styles.success,
-		LayerItemStyle: m.styles.layerItem,
-		Layers:         m.layers, SelectedLayer: m.selectedLayer, FirstVisibleLayer: m.firstVisibleLayer,
+		ListStyles: m.styles.list,
+		Layers:     m.layers, SelectedLayer: m.selectedLayer, FirstVisibleLayer: m.firstVisibleLayer,
 	}
 }
