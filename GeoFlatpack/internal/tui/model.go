@@ -37,6 +37,7 @@ type Model struct {
 	screen            screen
 	activePane        panel.Pane
 	layers            []panel.ListItem
+	categories        []categoryState
 	selectedLayer     int
 	firstVisibleLayer int
 	startedAt         time.Time
@@ -94,8 +95,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.session = msg.session
 			m.layers = nil
+			m.categories = nil
 			if m.session != nil {
-				m.layers = layerItems(m.session.Layers())
+				layers := m.session.Layers()
+				m.layers = layerItems(layers)
+				for _, layer := range layers {
+					m.categories = append(m.categories, newCategoryState(layer.Data))
+				}
 			}
 			m.screen = completionScreen
 		}
@@ -143,6 +149,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.layers[m.selectedLayer].Status = panel.ListIncomplete
 			}
 			m.activePane = panel.CategoryPane
+		case key.Matches(msg, m.keys.SelectionUp) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.CategoryPane:
+			if categories := m.currentCategories(); categories != nil {
+				categories.selected = panel.MoveListSelection(categories.selected, -1, len(categories.items))
+			}
+		case key.Matches(msg, m.keys.SelectionDown) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.CategoryPane:
+			if categories := m.currentCategories(); categories != nil {
+				categories.selected = panel.MoveListSelection(categories.selected, 1, len(categories.items))
+			}
+		case key.Matches(msg, m.keys.Select) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.CategoryPane:
+			if categories := m.currentCategories(); categories != nil && len(categories.items) > 0 {
+				categories.activate()
+				m.layers[m.selectedLayer].Status = panel.ListIncomplete
+				m.activePane = panel.FeaturePane
+			}
 		default:
 			if m.help.ShowAll || m.screen != scaffoldScreen {
 				m.refreshViewport()

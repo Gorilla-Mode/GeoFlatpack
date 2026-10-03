@@ -20,17 +20,22 @@ const (
 
 // ScaffoldOptions separates the body dimensions and focus styles from content.
 type ScaffoldOptions struct {
-	Width             int
-	Height            int
-	ActivePane        Pane
-	PaneStyle         lipgloss.Style
-	InactivePaneStyle lipgloss.Style
-	TitleStyle        lipgloss.Style
-	MutedStyle        lipgloss.Style
-	ListStyles        ListStyles
-	Layers            []ListItem
-	SelectedLayer     int
-	FirstVisibleLayer int
+	Width                int
+	Height               int
+	ActivePane           Pane
+	PaneStyle            lipgloss.Style
+	InactivePaneStyle    lipgloss.Style
+	TitleStyle           lipgloss.Style
+	MutedStyle           lipgloss.Style
+	ScrollHintStyle      lipgloss.Style
+	ListStyles           ListStyles
+	Layers               []ListItem
+	SelectedLayer        int
+	FirstVisibleLayer    int
+	Categories           []ListItem
+	SelectedCategory     int
+	FirstVisibleCategory int
+	CategoryEmptyText    string
 }
 
 type paneSize struct {
@@ -88,6 +93,7 @@ type paneOptions struct {
 	box     lipgloss.Style
 	title   lipgloss.Style
 	content string
+	footer  string
 }
 
 // Scaffold fills its assigned body directly; it is never viewport content.
@@ -101,9 +107,15 @@ func Scaffold(opts ScaffoldOptions) string {
 		if pane == opts.ActivePane {
 			box, title = opts.PaneStyle, opts.TitleStyle
 		}
+		interior := paneInterior(size, box)
 		paneOpts := paneOptions{size: size, heading: heading, box: box, title: title}
+		if listFooterHeight(interior) > 0 {
+			paneOpts.footer = opts.ScrollHintStyle.Render(ansi.Truncate("↑/↓ Scroll", interior.width, ""))
+		}
 		if pane == LayerPane {
-			paneOpts.content = List(layerListOptions(opts, paneInterior(size, box)))
+			paneOpts.content = List(layerListOptions(opts, interior))
+		} else if pane == CategoryPane {
+			paneOpts.content = List(categoryListOptions(opts, interior))
 		}
 		return renderPane(paneOpts)
 	}
@@ -177,8 +189,13 @@ func renderPane(opts paneOptions) string {
 	}
 	rows[0] = lipgloss.PlaceHorizontal(interior.width, lipgloss.Left,
 		strings.Repeat(" ", inset)+opts.title.Render(ansi.Truncate(opts.heading, interior.width-2*inset, "")))
+	contentEnd := len(rows)
+	if opts.footer != "" {
+		contentEnd--
+		rows[contentEnd] = opts.footer
+	}
 	for i, line := range strings.Split(opts.content, "\n") {
-		if i+1 >= len(rows) {
+		if i+1 >= contentEnd {
 			break
 		}
 		rows[i+1] = ansi.Truncate(line, interior.width, "")

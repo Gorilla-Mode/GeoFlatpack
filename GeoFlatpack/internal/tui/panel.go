@@ -68,11 +68,20 @@ func (m *Model) panel() string {
 }
 
 func (m *Model) scaffoldOptions(l panelLayout) panel.ScaffoldOptions {
-	return panel.ScaffoldOptions{
+	opts := panel.ScaffoldOptions{
 		Width: l.width, Height: l.bodyHeight, ActivePane: m.activePane,
 		PaneStyle: m.styles.pane, InactivePaneStyle: m.styles.inactivePane,
 		TitleStyle: m.styles.paneTitle, MutedStyle: m.styles.inactivePaneTitle,
-		ListStyles: m.styles.list,
-		Layers:     m.layers, SelectedLayer: m.selectedLayer, FirstVisibleLayer: m.firstVisibleLayer,
+		ScrollHintStyle: m.styles.muted,
+		ListStyles:      m.styles.list,
+		Layers:          m.layers, SelectedLayer: m.selectedLayer, FirstVisibleLayer: m.firstVisibleLayer,
+		CategoryEmptyText: "No layers loaded",
 	}
+	if categories := m.currentCategories(); categories != nil {
+		opts.Categories = categories.items
+		opts.SelectedCategory = categories.selected
+		opts.FirstVisibleCategory = categories.firstVisible
+		opts.CategoryEmptyText = categories.emptyText
+	}
+	return opts
 }
