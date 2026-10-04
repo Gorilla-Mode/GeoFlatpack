@@ -88,12 +88,14 @@ func (s paneSize) interior() paneSize {
 }
 
 type paneOptions struct {
-	size    paneSize
-	heading string
-	box     lipgloss.Style
-	title   lipgloss.Style
-	content string
-	footer  string
+	size         paneSize
+	heading      string
+	box          lipgloss.Style
+	title        lipgloss.Style
+	content      string
+	footer       string
+	contentInset int
+	contentGap   int
 }
 
 // Scaffold fills its assigned body directly; it is never viewport content.
@@ -109,6 +111,7 @@ func Scaffold(opts ScaffoldOptions) string {
 		}
 		interior := paneInterior(size, box)
 		paneOpts := paneOptions{size: size, heading: heading, box: box, title: title}
+		paneOpts.contentInset, paneOpts.contentGap = listInset(interior), listHeadingGap(interior)
 		if listFooterHeight(interior) > 0 {
 			paneOpts.footer = opts.ScrollHintStyle.Render(ansi.Truncate("↑/↓ Scroll", interior.width, ""))
 		}
@@ -195,10 +198,11 @@ func renderPane(opts paneOptions) string {
 		rows[contentEnd] = opts.footer
 	}
 	for i, line := range strings.Split(opts.content, "\n") {
-		if i+1 >= contentEnd {
+		y := i + 1 + opts.contentGap
+		if y >= contentEnd {
 			break
 		}
-		rows[i+1] = ansi.Truncate(line, interior.width, "")
+		rows[y] = strings.Repeat(" ", opts.contentInset) + ansi.Truncate(line, interior.width-2*opts.contentInset, "")
 	}
 	return box.Width(opts.size.width).Height(opts.size.height).
 		MaxWidth(opts.size.width).MaxHeight(opts.size.height).

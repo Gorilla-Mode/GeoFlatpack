@@ -22,7 +22,7 @@ func CategoryWindow(opts ScaffoldOptions) int {
 
 func categoryListOptions(opts ScaffoldOptions, interior paneSize) ListOptions {
 	list := ListOptions{
-		Width: interior.width, Height: listContentHeight(interior),
+		Width: interior.width - 2*listInset(interior), Height: listContentHeight(interior),
 		Items: opts.Categories, Selected: opts.SelectedCategory, FirstVisible: opts.FirstVisibleCategory,
 		Styles: opts.ListStyles, EmptyText: opts.CategoryEmptyText,
 	}
@@ -41,14 +41,28 @@ func categoryListOptions(opts ScaffoldOptions, interior paneSize) ListOptions {
 
 func layerListOptions(opts ScaffoldOptions, interior paneSize) ListOptions {
 	return ListOptions{
-		Width: interior.width, Height: listContentHeight(interior),
+		Width: interior.width - 2*listInset(interior), Height: listContentHeight(interior),
 		Items: opts.Layers, Selected: opts.SelectedLayer, FirstVisible: opts.FirstVisibleLayer,
 		Styles: opts.ListStyles, EmptyText: "No layers loaded",
 	}
 }
 
 func listContentHeight(interior paneSize) int {
-	return max(0, interior.height-1-listFooterHeight(interior))
+	return max(0, interior.height-1-listHeadingGap(interior)-listFooterHeight(interior))
+}
+
+func listInset(interior paneSize) int {
+	if interior.width >= 3 {
+		return 1
+	}
+	return 0
+}
+
+func listHeadingGap(interior paneSize) int {
+	if interior.height-1-listFooterHeight(interior) >= 2 {
+		return 1
+	}
+	return 0
 }
 
 func listFooterHeight(interior paneSize) int {
