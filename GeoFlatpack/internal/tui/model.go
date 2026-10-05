@@ -38,6 +38,7 @@ type Model struct {
 	activePane        panel.Pane
 	layers            []panel.ListItem
 	categories        []categoryState
+	stylingCatalog    stylingCatalog
 	selectedLayer     int
 	firstVisibleLayer int
 	startedAt         time.Time
@@ -60,17 +61,18 @@ func newModel(opts app.Options, prepare prepareFunc) *Model {
 	h := help.New()
 	h.Styles = s.help
 	m := &Model{
-		Options:     opts,
-		help:        h,
-		keys:        newKeyMap(),
-		detailKeys:  newDetailKeyMap(),
-		styles:      s,
-		width:       80,
-		height:      24,
-		spinner:     spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(s.title)),
-		viewport:    viewport.New(),
-		startedAt:   time.Now(),
-		preparation: newPreparation(prepare),
+		Options:        opts,
+		help:           h,
+		keys:           newKeyMap(),
+		detailKeys:     newDetailKeyMap(),
+		styles:         s,
+		stylingCatalog: cachedStylingCatalog(),
+		width:          80,
+		height:         24,
+		spinner:        spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(s.title)),
+		viewport:       viewport.New(),
+		startedAt:      time.Now(),
+		preparation:    newPreparation(prepare),
 	}
 	m.viewport.SetHorizontalStep(0)
 	m.refreshViewport()
@@ -161,8 +163,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if categories := m.currentCategories(); categories != nil && len(categories.items) > 0 {
 				categories.activate()
 				m.layers[m.selectedLayer].Status = panel.ListIncomplete
-				m.activePane = panel.FeaturePane
+				m.activePane = panel.FeaturesPane
 			}
+		case key.Matches(msg, m.keys.SelectionUp) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.FeaturesPane:
+			if features := m.currentFeatures(); features != nil {
+				features.selected = panel.MoveListSelection(features.selected, -1, len(features.items))
+			}
+		case key.Matches(msg, m.keys.SelectionDown) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.FeaturesPane:
+			if features := m.currentFeatures(); features != nil {
+				features.selected = panel.MoveListSelection(features.selected, 1, len(features.items))
+			}
+		case key.Matches(msg, m.keys.Select) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.FeaturesPane:
+			if features := m.currentFeatures(); features != nil && len(features.items) > 0 {
+				features.choose()
+				m.activePane = panel.FeatureStylingPane
+			}
+		case m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.FeatureStylingPane:
+			m.stylingInput(msg)
+		case m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.ControlsPane:
+			// Reserved for value controls; Info remains display-only.
 		default:
 			if m.help.ShowAll || m.screen != scaffoldScreen {
 				m.refreshViewport()

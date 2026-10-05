@@ -2,6 +2,7 @@ package tui
 
 import (
 	"GeoFlatpack/internal/app"
+	"GeoFlatpack/style/maplibre/svg"
 	"errors"
 	"io"
 	"sync"
@@ -12,6 +13,7 @@ import (
 
 type loadedSession interface {
 	Layers() []app.Layer
+	Icons() map[string]svg.Svg
 	Close() error
 }
 

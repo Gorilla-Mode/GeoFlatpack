@@ -15,6 +15,7 @@ const (
 	ListIncomplete
 	ListComplete
 	ListActive
+	ListAdd
 )
 
 // ListItem supplies presentation data for a layer, category, or feature option.
@@ -55,6 +56,9 @@ const (
 )
 
 func listHeight(item ListItem) int {
+	if item.Detail == "" && len(item.Children) > 0 {
+		return 1 + len(item.Children)
+	}
 	return listItemHeight + len(item.Children)
 }
 
@@ -159,6 +163,8 @@ func renderListItem(opts ListOptions, item ListItem, selected bool) string {
 	name = name.Bold(selected).Background(background).Inline(true)
 	indicator, indicatorStyle := "○", opts.Styles.Unopened
 	switch item.Status {
+	case ListAdd:
+		indicator = "+"
 	case ListIncomplete:
 		indicator, indicatorStyle = "●", opts.Styles.Incomplete
 	case ListComplete, ListActive:
@@ -168,9 +174,9 @@ func renderListItem(opts ListOptions, item ListItem, selected bool) string {
 	label := ansi.Truncate(listText(item.Name), max(0, opts.Width-2), "…")
 	first := indicatorStyle.Background(background).Render(indicator) + fill.Render(" ") + name.Render(label)
 	detail := opts.Styles.Detail.Background(background).Inline(true)
-	rows := []string{
-		ansi.Truncate(first, opts.Width, ""),
-		detail.Render(ansi.Truncate("  "+listText(item.Detail), opts.Width, "")),
+	rows := []string{ansi.Truncate(first, opts.Width, "")}
+	if item.Detail != "" || len(item.Children) == 0 {
+		rows = append(rows, detail.Render(ansi.Truncate("  "+listText(item.Detail), opts.Width, "")))
 	}
 	for i, child := range item.Children {
 		branch := "  ├── "

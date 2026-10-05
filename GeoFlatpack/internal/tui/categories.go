@@ -12,6 +12,7 @@ import (
 type categoryState struct {
 	items        []panel.ListItem
 	fields       []string
+	features     []featureState
 	selected     int
 	firstVisible int
 	active       int
@@ -44,7 +45,7 @@ func newCategoryState(data *fgb.Fgb) categoryState {
 	for _, group := range groups {
 		examples = append(examples, string(group.GeometryType))
 	}
-	state.add("", "No category field", len(groups), examples)
+	state.add("", "No category field", len(groups), examples, groups)
 	for _, field := range fields {
 		if field.Unavailable != "" {
 			continue
@@ -53,17 +54,18 @@ func newCategoryState(data *fgb.Fgb) categoryState {
 		if err != nil {
 			continue
 		}
-		state.add(field.Name, field.Name, len(groups), field.Examples)
+		state.add(field.Name, field.Name, field.Distinct, field.Examples, groups)
 	}
 	return state
 }
 
-func (s *categoryState) add(field, name string, count int, examples []string) {
+func (s *categoryState) add(field, name string, count int, examples []string, groups []maplibre.StyleGroup) {
 	detail := fmt.Sprintf("%d items to style", count)
 	if count == 1 {
 		detail = "1 item to style"
 	}
 	s.fields = append(s.fields, field)
+	s.features = append(s.features, newFeatureState(groups))
 	s.items = append(s.items, panel.ListItem{Name: name, Detail: detail, Children: append([]string(nil), examples[:min(3, len(examples))]...)})
 }
 

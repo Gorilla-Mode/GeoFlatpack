@@ -2,6 +2,7 @@ package tui
 
 import (
 	"GeoFlatpack/internal/tui/panel"
+	"GeoFlatpack/style/maplibre"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -52,14 +53,37 @@ func (m *Model) panel() string {
 		}
 	}
 
+	hints := m.keys.ShortHelp()[3:]
+	selectKey := m.keys.Select
+	if scaffold && m.activePane == panel.FeatureStylingPane {
+		if s := m.currentStyling(); s != nil {
+			contextHints := []key.Binding{}
+			if s.mode != styleSelection {
+				back := m.keys.Back
+				if s.mode == styleIcons {
+					back = key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Layer types"))
+				}
+				contextHints = append(contextHints, back)
+			}
+			if s.mode == styleEdit {
+				if s.activeLayer().style.Type == maplibre.RenderSymbol {
+					selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Use SVG"))
+				} else {
+					contextHints = append(contextHints, m.keys.Filter)
+					selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Toggle option"))
+				}
+			}
+			hints = append(contextHints, hints...)
+		}
+	}
 	sections = append(sections, panel.Footer(panel.FooterOptions{
 		Style:      l.box,
 		MutedStyle: m.styles.muted,
 		Width:      l.width,
 		Height:     l.footerHeight,
 		Help:       m.help,
-		Primary:    []key.Binding{m.keys.Help, m.keys.Quit, m.keys.Select},
-		Hints:      m.keys.ShortHelp()[3:],
+		Primary:    []key.Binding{m.keys.Help, m.keys.Quit, selectKey},
+		Hints:      hints,
 		Scrollable: !scaffold && m.viewport.TotalLineCount() > m.viewport.Height(),
 	}))
 
@@ -76,12 +100,23 @@ func (m *Model) scaffoldOptions(l panelLayout) panel.ScaffoldOptions {
 		ListStyles:      m.styles.list,
 		Layers:          m.layers, SelectedLayer: m.selectedLayer, FirstVisibleLayer: m.firstVisibleLayer,
 		CategoryEmptyText: "No layers loaded",
+		FeatureEmptyText:  "No layers loaded",
 	}
 	if categories := m.currentCategories(); categories != nil {
 		opts.Categories = categories.items
 		opts.SelectedCategory = categories.selected
 		opts.FirstVisibleCategory = categories.firstVisible
 		opts.CategoryEmptyText = categories.emptyText
+		opts.FeatureEmptyText = "Choose a category"
 	}
+	if features := m.currentFeatures(); features != nil {
+		opts.Features = features.items
+		opts.SelectedFeature = features.selected
+		opts.FirstVisibleFeature = features.firstVisible
+		opts.ChosenFeature = features.chosen
+		opts.FeatureChosen = features.chosen >= 0
+		opts.FeatureEmptyText = "No styling items"
+	}
+	m.stylingPresentation(&opts)
 	return opts
 }

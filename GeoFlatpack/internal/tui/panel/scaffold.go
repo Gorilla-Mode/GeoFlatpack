@@ -13,7 +13,8 @@ type Pane int
 const (
 	LayerPane Pane = iota
 	CategoryPane
-	FeaturePane
+	FeaturesPane
+	FeatureStylingPane
 	ControlsPane
 	PaneCount
 )
@@ -36,6 +37,24 @@ type ScaffoldOptions struct {
 	SelectedCategory     int
 	FirstVisibleCategory int
 	CategoryEmptyText    string
+	Features             []ListItem
+	SelectedFeature      int
+	FirstVisibleFeature  int
+	ChosenFeature        int
+	FeatureChosen        bool
+	FeatureEmptyText     string
+	Styling              []ListItem
+	StylingHeading       string
+	StylingEmptyText     string
+	SelectedStyling      int
+	FirstVisibleStyling  int
+	HideStylingSelection bool
+	ShowStack            bool
+	Stack                []ListItem
+	ActiveStackLayer     int
+	StackFirstVisible    int
+	StackEmptyText       string
+	InfoContent          string
 }
 
 type paneSize struct {
@@ -45,7 +64,7 @@ type paneSize struct {
 
 type scaffoldLayout struct {
 	gap      int
-	columns  [4]paneSize
+	columns  [5]paneSize
 	preview  paneSize
 	controls paneSize
 	split    bool
@@ -53,17 +72,17 @@ type scaffoldLayout struct {
 
 func newScaffoldLayout(width, height int) scaffoldLayout {
 	width, height = max(0, width), max(0, height)
-	l := scaffoldLayout{gap: min(1, width/3)}
-	available := width - 3*l.gap
+	l := scaffoldLayout{gap: min(1, width/4)}
+	available := width - 4*l.gap
 	used := 0
-	for i, ratio := range [...]int{18, 18, 27} {
-		w := available * ratio / 100
+	for i := 0; i < 4; i++ {
+		w := available * 16 / 100
 		l.columns[i] = paneSize{w, height}
 		used += w
 	}
-	l.columns[3] = paneSize{available - used, height}
+	l.columns[4] = paneSize{available - used, height}
 
-	l.preview = l.columns[3]
+	l.preview = l.columns[4]
 	interior := l.preview.interior()
 	if interior.width > 0 && interior.height >= 3 {
 		l.split = true
@@ -72,7 +91,7 @@ func newScaffoldLayout(width, height int) scaffoldLayout {
 		remaining := interior.height - 1
 		l.preview.height = (remaining + 1) / 2
 		l.controls = paneSize{l.preview.width, remaining / 2}
-		if interior != l.columns[3] {
+		if interior != l.columns[4] {
 			l.preview.height += 2 // top border and shared divider
 			l.controls.height++   // bottom border
 		}
@@ -119,16 +138,25 @@ func Scaffold(opts ScaffoldOptions) string {
 			paneOpts.content = List(layerListOptions(opts, interior))
 		} else if pane == CategoryPane {
 			paneOpts.content = List(categoryListOptions(opts, interior))
+		} else if pane == FeaturesPane {
+			paneOpts.content = List(featureListOptions(opts, interior))
+		} else if pane == FeatureStylingPane {
+			paneOpts.content = List(stylingListOptions(opts, interior))
 		}
 		return renderPane(paneOpts)
 	}
 
 	preview := renderPreviewControls(opts, l)
+	stylingHeading := opts.StylingHeading
+	if stylingHeading == "" {
+		stylingHeading = "Feature styling"
+	}
 	gap := lipgloss.NewStyle().Width(l.gap).Height(opts.Height).Render(strings.Repeat(" ", l.gap))
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		selectable(LayerPane, l.columns[0], "Layer selection"), gap,
-		selectable(CategoryPane, l.columns[1], "Category option"), gap,
-		selectable(FeaturePane, l.columns[2], "Feature option"), gap,
+		selectable(CategoryPane, l.columns[1], "Category"), gap,
+		selectable(FeaturesPane, l.columns[2], "Features"), gap,
+		selectable(FeatureStylingPane, l.columns[3], stylingHeading), gap,
 		preview,
 	)
 }
@@ -138,6 +166,9 @@ func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {
 	if !l.split {
 		return renderPane(preview)
 	}
+	if opts.ShowStack {
+		return renderStackControls(opts, l, preview)
+	}
 	controls := paneOptions{
 		size: l.controls, heading: "Controls/color picker",
 		box: opts.InactivePaneStyle, title: opts.MutedStyle,
@@ -146,12 +177,12 @@ func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {
 		controls.box, controls.title = opts.PaneStyle, opts.TitleStyle
 	}
 
-	if l.columns[3].interior() == l.columns[3] {
+	if l.columns[4].interior() == l.columns[4] {
 		// Without an outer outline, keep a plain divider between the sections.
 		preview.box = preview.box.Border(lipgloss.RoundedBorder(), false)
 		controls.box = controls.box.Border(lipgloss.RoundedBorder(), false)
 		divider := lipgloss.NewStyle().Foreground(controls.box.GetBorderTopForeground()).
-			Render(strings.Repeat("─", l.columns[3].width))
+			Render(strings.Repeat("─", l.columns[4].width))
 		return strings.Join([]string{renderPane(preview), divider, renderPane(controls)}, "\n")
 	}
 

@@ -15,6 +15,25 @@ func (m *Model) refreshViewport() {
 		if categories := m.currentCategories(); categories != nil {
 			categories.firstVisible = panel.CategoryWindow(m.scaffoldOptions(l))
 		}
+		if features := m.currentFeatures(); features != nil {
+			features.firstVisible = panel.FeaturesWindow(m.scaffoldOptions(l))
+		}
+		if s := m.currentStyling(); s != nil {
+			opts := m.scaffoldOptions(l)
+			first := panel.StylingWindow(opts)
+			s.stackFirstVisible = panel.StackWindow(opts)
+			switch s.mode {
+			case styleTypes:
+				s.typeFirstVisible = first
+			case styleIcons:
+				s.iconFirstVisible = first
+			case styleSelection:
+				s.firstVisible = first
+			case styleEdit:
+				layer := s.activeLayer()
+				layer.firstVisible = first
+			}
+		}
 		m.viewport.SetContent("")
 		return
 	}

@@ -20,6 +20,31 @@ func CategoryWindow(opts ScaffoldOptions) int {
 	return ListWindow(categoryListOptions(opts, paneInterior(l.columns[1], style)))
 }
 
+// FeaturesWindow keeps the cursor or chosen styling target visible.
+func FeaturesWindow(opts ScaffoldOptions) int {
+	l := newScaffoldLayout(opts.Width, opts.Height)
+	style := opts.InactivePaneStyle
+	if opts.ActivePane == FeaturesPane {
+		style = opts.PaneStyle
+	}
+	return ListWindow(featureListOptions(opts, paneInterior(l.columns[2], style)))
+}
+
+func featureListOptions(opts ScaffoldOptions, interior paneSize) ListOptions {
+	list := ListOptions{
+		Width: interior.width - 2*listInset(interior), Height: listContentHeight(interior),
+		Items: opts.Features, Selected: opts.SelectedFeature, FirstVisible: opts.FirstVisibleFeature,
+		Styles: opts.ListStyles, EmptyText: opts.FeatureEmptyText,
+	}
+	if opts.ActivePane != FeaturesPane {
+		list.HideSelection = !opts.FeatureChosen
+		if opts.FeatureChosen {
+			list.Selected = opts.ChosenFeature
+		}
+	}
+	return list
+}
+
 func categoryListOptions(opts ScaffoldOptions, interior paneSize) ListOptions {
 	list := ListOptions{
 		Width: interior.width - 2*listInset(interior), Height: listContentHeight(interior),

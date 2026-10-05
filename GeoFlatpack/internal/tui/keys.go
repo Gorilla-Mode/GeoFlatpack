@@ -3,6 +3,8 @@ package tui
 import "charm.land/bubbles/v2/key"
 
 type keyMap struct {
+	Back              key.Binding
+	Filter            key.Binding
 	Help              key.Binding
 	Quit              key.Binding
 	Select            key.Binding
@@ -16,6 +18,8 @@ type keyMap struct {
 
 func newKeyMap() keyMap {
 	return keyMap{
+		Back:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Style layers")),
+		Filter: key.NewBinding(key.WithKeys("h"), key.WithHelp("h", "Filter options")),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("?", "help"),
@@ -58,6 +62,8 @@ func newKeyMap() keyMap {
 }
 
 type detailKeyMap struct {
+	Back              key.Binding
+	Filter            key.Binding
 	Help              key.Binding
 	Quit              key.Binding
 	Select            key.Binding
@@ -71,6 +77,8 @@ type detailKeyMap struct {
 
 func newDetailKeyMap() detailKeyMap {
 	return detailKeyMap{
+		Back:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("Escape", "Return to style layers; from SVG choices, return to layer types")),
+		Filter: key.NewBinding(key.WithKeys("h"), key.WithHelp("H", "Show all style options or only included options; inactive for SVG editing")),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("Question mark", "Show or hide the complete keyboard reference"),
@@ -81,7 +89,7 @@ func newDetailKeyMap() detailKeyMap {
 		),
 		Select: key.NewBinding(
 			key.WithKeys("enter"),
-			key.WithHelp("Enter", "Primary action. Selects the current item, enters field, etc."),
+			key.WithHelp("Enter", "Select an item, toggle a style option, or use the highlighted SVG"),
 		),
 		LeftPane: key.NewBinding(
 			key.WithKeys("alt+left", "alt+b", "ctrl+left"),
@@ -126,6 +134,8 @@ func (k keyMap) ShortHelp() []key.Binding {
 
 func (k detailKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{
+		k.Back,
+		k.Filter,
 		k.Help,
 		k.Quit,
 		k.Select,
