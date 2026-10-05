@@ -52,7 +52,7 @@ const (
 // The first render type is the default for an unconfigured geometry group.
 var RenderTypes = map[GeometryType][]RenderType{
 	Polygon: {RenderFill, RenderLine, RenderCircle},
-	Line:    {RenderLine},
+	Line:    {RenderLine, RenderCircle},
 	Point:   {RenderCircle},
 }
 
