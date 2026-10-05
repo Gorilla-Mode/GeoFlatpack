@@ -32,6 +32,8 @@ github.com/airbusgeo/godal v0.0.18 h1:NQJ9P7OgSs5zVtlWH/tOta7QHYbbtha7Nttf63YM01
 github.com/airbusgeo/godal v0.0.18/go.mod h1:Mpn/6exBzEbIx4DaG2rIjCmAiF9Ww4SJN2ZtwVsSwCo=
 github.com/airbusgeo/osio v0.1.3 h1:IxNf1co8lxwqJCziV+5qZyZbkT6JYdmR3L0oomNffrk=
 github.com/airbusgeo/osio v0.1.3/go.mod h1:d4qlaDSgsMilFoi+/62vwFZStuYIHIDovYzIRjTK+Jw=
+github.com/atotto/clipboard v0.1.4 h1:EH0zSVneZPSuFR11BlR9YppQTVDbh5+16AmcJi4g1z4=
+github.com/atotto/clipboard v0.1.4/go.mod h1:ZY9tmq7sm5xIbd9bOK4onWV4S6X0u6GY7Vn0Yu86PYI=
 github.com/aymanbagabas/go-udiff v0.4.0 h1:TKnLPh7IbnizJIBKFWa9mKayRUBQ9Kh1BPCk6w2PnYM=
 github.com/aymanbagabas/go-udiff v0.4.0/go.mod h1:0L9PGwj20lrtmEMeyw4WKJ/TMyDtvAoK9bf2u/mNo3w=
 github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
