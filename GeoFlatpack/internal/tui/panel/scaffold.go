@@ -55,6 +55,10 @@ type ScaffoldOptions struct {
 	StackFirstVisible    int
 	StackEmptyText       string
 	InfoContent          string
+	Controls             []ControlItem
+	SelectedControl      int
+	FirstVisibleControl  int
+	ControlsEmptyText    string
 }
 
 type paneSize struct {
@@ -170,7 +174,7 @@ func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {
 		return renderStackControls(opts, l, preview)
 	}
 	controls := paneOptions{
-		size: l.controls, heading: "Controls/color picker",
+		size: l.controls, heading: "Controls",
 		box: opts.InactivePaneStyle, title: opts.MutedStyle,
 	}
 	if opts.ActivePane == ControlsPane {
@@ -181,6 +185,7 @@ func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {
 		// Without an outer outline, keep a plain divider between the sections.
 		preview.box = preview.box.Border(lipgloss.RoundedBorder(), false)
 		controls.box = controls.box.Border(lipgloss.RoundedBorder(), false)
+		populateControls(&controls, opts, paneInterior(l.controls, controls.box))
 		divider := lipgloss.NewStyle().Foreground(controls.box.GetBorderTopForeground()).
 			Render(strings.Repeat("─", l.columns[4].width))
 		return strings.Join([]string{renderPane(preview), divider, renderPane(controls)}, "\n")
@@ -192,6 +197,7 @@ func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {
 	preview.box = preview.box.Border(border).
 		BorderBottomForeground(controls.box.GetBorderTopForeground())
 	controls.box = controls.box.BorderTop(false)
+	populateControls(&controls, opts, paneInterior(l.controls, controls.box))
 	return renderPane(preview) + "\n" + renderPane(controls)
 }
 

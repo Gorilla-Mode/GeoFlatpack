@@ -55,9 +55,25 @@ func (m *Model) panel() string {
 
 	hints := m.keys.ShortHelp()[3:]
 	selectKey := m.keys.Select
+	helpKey := m.keys.Help
+	if scaffold && m.activePane == panel.ControlsPane {
+		selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Edit / apply"))
+		hints = append([]key.Binding{
+			key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Back to editing")),
+			key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("Tab/⇧Tab", "Control")),
+		}, hints...)
+		if m.controlsEditing() {
+			helpKey = key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Cancel"))
+			selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Save"))
+			hints = []key.Binding{m.keys.LeftPane, m.keys.RightPane, key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←/→", "Cursor"))}
+		}
+	}
 	if scaffold && m.activePane == panel.FeatureStylingPane {
 		if s := m.currentStyling(); s != nil {
 			contextHints := []key.Binding{}
+			if s.mode == styleSelection && s.selected >= 0 && s.selected < len(s.layers) {
+				contextHints = append(contextHints, m.keys.RemoveLayer)
+			}
 			if s.mode != styleSelection {
 				back := m.keys.Back
 				if s.mode == styleIcons {
@@ -71,6 +87,9 @@ func (m *Model) panel() string {
 				} else {
 					contextHints = append(contextHints, m.keys.Filter)
 					selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Toggle option"))
+					if s.activeLayer().includedOnly {
+						selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Edit option"))
+					}
 				}
 			}
 			hints = append(contextHints, hints...)
@@ -82,7 +101,7 @@ func (m *Model) panel() string {
 		Width:      l.width,
 		Height:     l.footerHeight,
 		Help:       m.help,
-		Primary:    []key.Binding{m.keys.Help, m.keys.Quit, selectKey},
+		Primary:    []key.Binding{helpKey, m.keys.Quit, selectKey},
 		Hints:      hints,
 		Scrollable: !scaffold && m.viewport.TotalLineCount() > m.viewport.Height(),
 	}))
@@ -118,5 +137,6 @@ func (m *Model) scaffoldOptions(l panelLayout) panel.ScaffoldOptions {
 		opts.FeatureEmptyText = "No styling items"
 	}
 	m.stylingPresentation(&opts)
+	m.controlsPresentation(&opts)
 	return opts
 }

@@ -36,5 +36,46 @@ func (m *Model) currentFeatures() *featureState {
 
 func (s *featureState) choose() {
 	s.chosen = s.selected
-	s.items[s.chosen].Status = panel.ListIncomplete
+	if s.items[s.chosen].Status == panel.ListUnopened {
+		s.items[s.chosen].Status = panel.ListIncomplete
+	}
+}
+
+// refreshReadiness preserves unopened targets while deriving completed states
+// from their full stack, independently of the current navigation selection.
+func (s *featureState) refreshReadiness() bool {
+	complete := len(s.items) > 0 && len(s.items) == len(s.styling)
+	for i := range s.items {
+		status := panel.ListUnopened
+		if i < len(s.styling) {
+			status = s.styling[i].status()
+		}
+		if status == panel.ListUnopened && s.items[i].Status != panel.ListUnopened {
+			status = panel.ListIncomplete
+		}
+		s.items[i].Status = status
+		complete = complete && status == panel.ListComplete
+	}
+	return complete
+}
+
+func (m *Model) refreshReadiness() {
+	for i := range m.categories {
+		categories := &m.categories[i]
+		complete := false
+		for j := range categories.features {
+			ready := categories.features[j].refreshReadiness()
+			if j == categories.active {
+				complete = ready
+			}
+		}
+		if i >= len(m.layers) {
+			continue
+		}
+		if complete {
+			m.layers[i].Status = panel.ListComplete
+		} else if categories.active >= 0 || m.layers[i].Status != panel.ListUnopened {
+			m.layers[i].Status = panel.ListIncomplete
+		}
+	}
 }

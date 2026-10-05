@@ -130,7 +130,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.viewport.GotoTop()
 			m.help.ShowAll = false
 			m.keys.Help.SetHelp("?", "help")
-		case key.Matches(msg, m.keys.Help):
+		case key.Matches(msg, m.keys.Help) && !m.controlsEditing():
 			m.help.ShowAll = !m.help.ShowAll
 			m.viewport.GotoTop()
 			if m.help.ShowAll {
@@ -142,6 +142,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.activePane = (m.activePane + 1) % panel.PaneCount
 		case key.Matches(msg, m.keys.LeftPane) && m.screen == scaffoldScreen && !m.help.ShowAll:
 			m.activePane = (m.activePane + panel.PaneCount - 1) % panel.PaneCount
+		case key.Matches(msg, m.keys.Back) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.ControlsPane && !m.controlsEditing():
+			m.activePane = panel.FeatureStylingPane
 		case key.Matches(msg, m.keys.SelectionUp) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.LayerPane:
 			m.selectedLayer = panel.MoveListSelection(m.selectedLayer, -1, len(m.layers))
 		case key.Matches(msg, m.keys.SelectionDown) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.LayerPane:
@@ -181,12 +183,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.FeatureStylingPane:
 			m.stylingInput(msg)
 		case m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.ControlsPane:
-			// Reserved for value controls; Info remains display-only.
+			cmd = m.controlsInput(msg)
 		default:
 			if m.help.ShowAll || m.screen != scaffoldScreen {
 				m.refreshViewport()
 				m.viewport, cmd = m.viewport.Update(msg)
 			}
+		}
+	default:
+		if m.controlsEditing() {
+			cmd = m.controlsInput(msg)
 		}
 	}
 	m.refreshViewport()

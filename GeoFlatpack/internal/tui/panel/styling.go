@@ -94,8 +94,9 @@ func renderStackControls(opts ScaffoldOptions, l scaffoldLayout, preview paneOpt
 		title = opts.TitleStyle
 	}
 	controls := paneOptions{
-		size: lower.controls, heading: "Controls/color picker", box: plain, title: title,
+		size: lower.controls, heading: "Controls", box: plain, title: title,
 	}
+	populateControls(&controls, opts, lower.controls)
 	content := renderPane(controls)
 	borderStyle := lipgloss.NewStyle().Foreground(lower.box.GetBorderTopForeground())
 	if lower.divided {

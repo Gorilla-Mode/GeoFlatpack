@@ -7,6 +7,7 @@ import (
 )
 
 func (m *Model) refreshViewport() {
+	m.refreshReadiness()
 	l := m.layout()
 	m.viewport.SetWidth(l.contentWidth)
 	m.viewport.SetHeight(l.contentHeight)
@@ -33,6 +34,9 @@ func (m *Model) refreshViewport() {
 				layer := s.activeLayer()
 				layer.firstVisible = first
 			}
+		}
+		if _, _, c := m.currentControl(); c != nil {
+			c.firstVisible = panel.ControlsWindow(m.scaffoldOptions(l))
 		}
 		m.viewport.SetContent("")
 		return

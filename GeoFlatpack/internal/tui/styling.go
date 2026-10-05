@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -56,7 +57,7 @@ var cachedStylingCatalog = sync.OnceValue(func() stylingCatalog {
 	return catalog
 })
 
-// Inclusion and future validated values are drafts, separate from output maps.
+// Inclusion and validated values are drafts, separate from output maps.
 type optionDraft struct {
 	included      bool
 	value         any
@@ -69,7 +70,9 @@ func (d optionDraft) status() panel.ListStatus {
 		return panel.ListUnopened
 	}
 	if d.hasValue && d.validationErr == nil {
-		return panel.ListComplete
+		if _, err := json.Marshal(d.value); err == nil {
+			return panel.ListComplete
+		}
 	}
 	return panel.ListIncomplete
 }
@@ -80,6 +83,7 @@ type styleLayerState struct {
 	options                map[string]optionDraft
 	selected, firstVisible int
 	includedOnly           bool
+	controls               map[string]*controlState
 }
 
 type stylingState struct {
@@ -90,6 +94,42 @@ type stylingState struct {
 	typeSelected, typeFirstVisible int
 	iconSelected, iconFirstVisible int
 	stackFirstVisible              int
+}
+
+// status is shared by stack indicators and the parent feature's readiness.
+func (l *styleLayerState) status() panel.ListStatus {
+	included := 0
+	for _, draft := range l.options {
+		if !draft.included {
+			continue
+		}
+		included++
+		if draft.status() != panel.ListComplete {
+			return panel.ListIncomplete
+		}
+	}
+	if l.style.Type == maplibre.RenderSymbol {
+		if l.style.IconName == "" || l.style.Layout["icon-image"] != l.style.IconName {
+			return panel.ListIncomplete
+		}
+		return panel.ListComplete
+	}
+	if included == 0 {
+		return panel.ListUnopened
+	}
+	return panel.ListComplete
+}
+
+func (s *stylingState) status() panel.ListStatus {
+	if len(s.layers) == 0 {
+		return panel.ListUnopened
+	}
+	for _, layer := range s.layers {
+		if layer.status() != panel.ListComplete {
+			return panel.ListIncomplete
+		}
+	}
+	return panel.ListComplete
 }
 
 func (m *Model) currentStyling() *stylingState {
@@ -177,6 +217,24 @@ func (s *stylingState) displayOrder() []int {
 	return order
 }
 
+func (s *stylingState) removeSelectedLayer() {
+	if s.mode != styleSelection || s.selected < 0 || s.selected >= len(s.layers) {
+		return // The final Add layer row is an action, not a layer.
+	}
+	index := s.displayOrder()[s.selected]
+	s.layers = slices.Delete(s.layers, index, index+1)
+	if len(s.layers) == 0 {
+		s.active, s.selected, s.firstVisible, s.stackFirstVisible = -1, 0, 0, 0
+		return
+	}
+	s.selected = min(s.selected, len(s.layers)-1)
+	if s.active == index {
+		s.active = s.displayOrder()[s.selected]
+	} else if s.active > index {
+		s.active--
+	}
+}
+
 func (s *stylingState) stackItems() ([]panel.ListItem, int) {
 	counts, numbers := map[maplibre.RenderType]int{}, map[int]int{}
 	for i, layer := range s.layers {
@@ -193,7 +251,7 @@ func (s *stylingState) stackItems() ([]panel.ListItem, int) {
 		if layer.style.Type == maplibre.RenderSymbol {
 			name = layer.style.IconName + " (" + name + ")"
 		}
-		included, ready := 0, 0
+		included := 0
 		var children []string
 		names := make([]string, 0, len(layer.options))
 		for name := range layer.options {
@@ -216,26 +274,16 @@ func (s *stylingState) stackItems() ([]panel.ListItem, int) {
 				}
 				children = append(children, name+": "+value)
 				included++
-				if draft.status() == panel.ListComplete {
-					ready++
-				}
 			}
 		}
 		if layer.style.Type == maplibre.RenderSymbol {
 			children = append(children, "SVG: "+layer.style.IconName)
 		}
-		status := panel.ListUnopened
-		if included > 0 {
-			status = panel.ListIncomplete
-			if ready == included {
-				status = panel.ListComplete
-			}
-		}
 		detail := fmt.Sprintf("%d options", included)
 		if included == 1 {
 			detail = "1 option"
 		}
-		items = append(items, panel.ListItem{Name: name, Detail: detail, Status: status, Children: children})
+		items = append(items, panel.ListItem{Name: name, Detail: detail, Status: layer.status(), Children: children})
 		if index == s.active {
 			active = row
 		}
@@ -274,6 +322,8 @@ func (m *Model) stylingInput(msg tea.KeyPressMsg) {
 		return
 	}
 	switch msg.String() {
+	case "backspace":
+		s.removeSelectedLayer()
 	case "esc":
 		if s.mode == styleEdit {
 			s.mode = styleSelection
@@ -351,6 +401,10 @@ func (m *Model) stylingInput(msg tea.KeyPressMsg) {
 				return
 			}
 			if property, ok := layer.currentProperty(); ok {
+				if layer.includedOnly {
+					m.activePane = panel.ControlsPane
+					return
+				}
 				draft := layer.options[property.name]
 				draft.included = !draft.included
 				layer.options[property.name] = draft
