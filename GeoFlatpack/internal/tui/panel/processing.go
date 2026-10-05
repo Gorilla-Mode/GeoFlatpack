@@ -3,6 +3,7 @@ package panel
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -29,6 +30,8 @@ type ProcessingOptions struct {
 	Elapsed      time.Duration
 	Err          error
 	LayerNames   []string
+	SVGDir       string
+	SVGNames     []string
 	Loaded       bool
 	Width        int
 	TitleStyle   lipgloss.Style
@@ -80,6 +83,24 @@ func Processing(opts ProcessingOptions) string {
 
 	if count != "" {
 		parts = append(parts, count)
+	}
+	if opts.SVGDir != "" {
+		directory := filepath.Clean(opts.SVGDir)
+		icons := tree.Root(ansi.Wrap(listText(filepath.Base(directory)), max(1, opts.Width), "")).RootStyle(opts.TitleStyle).
+			EnumeratorStyle(opts.MutedStyle.PaddingRight(1)).IndenterStyle(opts.MutedStyle.PaddingRight(1))
+		if opts.Loaded && opts.State != Failure {
+			names := slices.Clone(opts.SVGNames)
+			slices.Sort(names)
+			for _, name := range names {
+				icons.Child(ansi.Wrap(listText(name), max(1, opts.Width-4), ""))
+			}
+		} else if opts.State == Loading {
+			icons.Child(opts.MutedStyle.Render("Reading SVGs…"))
+		}
+		parts = append(parts, "", opts.MutedStyle.Render(filepath.Dir(directory)), icons.String())
+		if opts.Loaded && opts.State != Failure {
+			parts = append(parts, opts.MutedStyle.Render(fmt.Sprintf("Loaded SVGs: %d", len(opts.SVGNames))))
+		}
 	}
 
 	switch opts.State {

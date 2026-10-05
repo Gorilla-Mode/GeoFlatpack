@@ -323,7 +323,22 @@ func (m *Model) stylingInput(msg tea.KeyPressMsg) {
 	}
 	switch msg.String() {
 	case "backspace":
-		s.removeSelectedLayer()
+		if s.mode == styleEdit {
+			layer := s.activeLayer()
+			if layer == nil || layer.style.Type == maplibre.RenderSymbol {
+				return
+			}
+			if property, ok := layer.currentProperty(); ok {
+				draft := layer.options[property.name]
+				if draft.included {
+					draft.included = false
+					layer.options[property.name] = draft
+					layer.recoverSelection(property.name)
+				}
+			}
+		} else {
+			s.removeSelectedLayer()
+		}
 	case "esc":
 		if s.mode == styleEdit {
 			s.mode = styleSelection

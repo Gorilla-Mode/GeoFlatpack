@@ -17,7 +17,7 @@ func Run(opts app.Options, in io.Reader, out io.Writer) error {
 
 func runModel(model *Model, in io.Reader, out io.Writer, options ...tea.ProgramOption) (err error) {
 	defer func() {
-		err = errors.Join(err, model.preparation.finish())
+		err = errors.Join(err, model.writeOperation.finish(), model.preparation.finish())
 	}()
 
 	options = append(options, tea.WithInput(in), tea.WithOutput(out))

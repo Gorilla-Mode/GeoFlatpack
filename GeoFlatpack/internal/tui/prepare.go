@@ -14,6 +14,7 @@ import (
 type loadedSession interface {
 	Layers() []app.Layer
 	Icons() map[string]svg.Svg
+	Write([]app.StyleSelection) error
 	Close() error
 }
 

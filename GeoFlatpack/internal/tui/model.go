@@ -4,6 +4,8 @@ package tui
 import (
 	"GeoFlatpack/internal/app"
 	"GeoFlatpack/internal/tui/panel"
+	"fmt"
+	"path/filepath"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -47,6 +49,10 @@ type Model struct {
 	err               error
 	session           loadedSession
 	preparation       *preparation
+	writeOperation    *writeOperation
+	writing           bool
+	writeStatus       string
+	writeErr          error
 }
 
 var _ tea.Model = (*Model)(nil)
@@ -86,6 +92,25 @@ func (m *Model) Init() tea.Cmd {
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
+	case writeDoneMsg:
+		if msg.operation == nil || msg.operation != m.writeOperation {
+			break
+		}
+		m.writing = false
+		m.writeErr = msg.err
+		directory := "."
+		if m.session != nil {
+			if layers := m.session.Layers(); len(layers) > 0 {
+				directory = filepath.Dir(layers[0].OutputPath)
+			}
+		}
+		m.writeStatus = fmt.Sprintf("Written files to %q", directory)
+		if msg.err != nil {
+			m.writeStatus = "Write failed: " + msg.err.Error()
+		}
+		if m.quitting {
+			return m, tea.Quit
+		}
 	case preparedMsg:
 		m.elapsed, m.err = msg.elapsed, msg.err
 
@@ -118,11 +143,18 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.keys.Quit):
-			if m.screen == loadingScreen {
+			if m.screen == loadingScreen || m.writing {
 				m.quitting = true
+				if m.writing {
+					m.writeStatus = "Finishing write before exiting…"
+				}
 				break
 			}
 			return m, tea.Quit
+		case m.writing:
+			// The writer exclusively owns the session until its result arrives.
+		case key.Matches(msg, m.keys.WriteFiles) && m.screen == scaffoldScreen && !m.help.ShowAll && !m.controlsEditing():
+			cmd = m.startWrite()
 		case key.Matches(msg, m.keys.Select) && m.screen == completionScreen:
 			m.screen = scaffoldScreen
 			m.activePane = panel.LayerPane
@@ -191,7 +223,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	default:
-		if m.controlsEditing() {
+		if !m.writing && m.controlsEditing() {
 			cmd = m.controlsInput(msg)
 		}
 	}

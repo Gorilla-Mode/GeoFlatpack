@@ -25,6 +25,21 @@ func (m *Model) panel() string {
 				header = ansi.Truncate(warning, l.width, "")
 			}
 		}
+		if m.writeStatus != "" {
+			style := m.styles.success
+			if m.writing {
+				style = m.styles.muted
+			} else if m.writeErr != nil {
+				style = m.styles.failure
+			}
+			message := strings.NewReplacer("\n", " ", "\r", " ", "\t", " ").Replace(ansi.Strip(m.writeStatus))
+			status := style.Inline(true).Render(message)
+			if lipgloss.Width(header)+3+lipgloss.Width(status) <= l.width {
+				header += " • " + status
+			} else {
+				header = ansi.Truncate(status, l.width, "…")
+			}
+		}
 		sections = append(sections, header)
 	}
 
@@ -85,6 +100,10 @@ func (m *Model) panel() string {
 				if s.activeLayer().style.Type == maplibre.RenderSymbol {
 					selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Use SVG"))
 				} else {
+					layer := s.activeLayer()
+					if property, ok := layer.currentProperty(); ok && layer.options[property.name].included {
+						contextHints = append(contextHints, m.keys.RemoveOption)
+					}
 					contextHints = append(contextHints, m.keys.Filter)
 					selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Toggle option"))
 					if s.activeLayer().includedOnly {
@@ -95,13 +114,21 @@ func (m *Model) panel() string {
 			hints = append(contextHints, hints...)
 		}
 	}
+	primary := []key.Binding{helpKey, m.keys.Quit, selectKey}
+	if m.canWrite() {
+		hints = append([]key.Binding{m.keys.WriteFiles}, hints...)
+	}
+	if m.writing {
+		primary = []key.Binding{m.keys.Quit}
+		hints = nil
+	}
 	sections = append(sections, panel.Footer(panel.FooterOptions{
 		Style:      l.box,
 		MutedStyle: m.styles.muted,
 		Width:      l.width,
 		Height:     l.footerHeight,
 		Help:       m.help,
-		Primary:    []key.Binding{helpKey, m.keys.Quit, selectKey},
+		Primary:    primary,
 		Hints:      hints,
 		Scrollable: !scaffold && m.viewport.TotalLineCount() > m.viewport.Height(),
 	}))

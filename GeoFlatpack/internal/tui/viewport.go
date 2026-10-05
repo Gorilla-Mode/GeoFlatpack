@@ -59,6 +59,7 @@ func (m *Model) body(width int) string {
 	opts := panel.ProcessingOptions{
 		State:        panel.Complete,
 		Input:        m.Options.Input,
+		SVGDir:       m.Options.SVGDir,
 		Quitting:     m.quitting,
 		Elapsed:      m.elapsed,
 		Err:          m.err,
@@ -82,6 +83,9 @@ func (m *Model) body(width int) string {
 		opts.Loaded = true
 		for _, layer := range m.session.Layers() {
 			opts.LayerNames = append(opts.LayerNames, layer.Name)
+		}
+		for _, name := range m.iconNames() {
+			opts.SVGNames = append(opts.SVGNames, name+".svg")
 		}
 	}
 	return panel.Processing(opts)
