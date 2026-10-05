@@ -39,6 +39,9 @@ func ControlsDimensions(opts ScaffoldOptions) (int, int) {
 }
 
 func ControlsWindow(opts ScaffoldOptions) int {
+	if opts.ColorPicker != nil {
+		return 0
+	}
 	l := newScaffoldLayout(opts.Width, opts.Height)
 	if !l.split {
 		return opts.FirstVisibleControl
@@ -49,9 +52,56 @@ func ControlsWindow(opts ScaffoldOptions) int {
 func populateControls(p *paneOptions, opts ScaffoldOptions, size paneSize) {
 	p.contentInset, p.contentGap = listInset(size), listHeadingGap(size)
 	p.content = renderControls(opts, size)
+	if opts.ColorPicker != nil {
+		o := controlsListOptions(opts, size)
+		p.content = RenderColorPicker(*opts.ColorPicker, o.Width, o.Height, opts.ListStyles)
+	}
 	if listFooterHeight(size) > 0 {
 		p.footer = opts.ScrollHintStyle.Render(ansi.Truncate("↑/↓ Scroll", size.width, ""))
+		if opts.ColorPicker != nil {
+			hint := "Tab/⇧Tab Focus · Enter Adjust"
+			if opts.ColorPicker.Editing {
+				hint = "←/→ Cursor · Enter Finish"
+			} else if opts.ColorPicker.Active {
+				hint = "Arrows Adjust · Esc Finish"
+			} else if selected := opts.ColorPicker.Selected; selected >= PickerHue && selected <= PickerLightness || selected >= PickerRed && selected <= PickerBlue {
+				action := "Adjust"
+				if selected >= PickerRed && selected <= PickerBlue {
+					action = "Edit"
+				}
+				hint = "←/→ Adjust · Tab/⇧Tab Focus · Enter " + action
+			}
+			p.footer = opts.ScrollHintStyle.Render(ansi.Truncate(hint, size.width, ""))
+		}
 	}
+}
+
+// ControlsRegion gives the content rectangle in scaffold coordinates. Rendering
+// and picker mouse input share the same borders, heading gap, and list insets.
+func ControlsRegion(opts ScaffoldOptions) PickerRect {
+	l := newScaffoldLayout(opts.Width, opts.Height)
+	if !l.split {
+		return PickerRect{}
+	}
+	lower := newLowerLayout(opts, l)
+	x := 4 * l.gap
+	for i := 0; i < 4; i++ {
+		x += l.columns[i].width
+	}
+	box := paneBox(l.controls, lower.box)
+	if box.GetBorderLeft() {
+		x++
+	}
+	if lower.divided {
+		x += lower.stack.width + 1
+	}
+	x += listInset(lower.controls)
+	y := l.preview.height + 1 + listHeadingGap(lower.controls)
+	if box.GetBorderTop() {
+		y++
+	}
+	w, h := ControlsDimensions(opts)
+	return PickerRect{X: x, Y: y, Width: w, Height: h}
 }
 
 func renderControls(opts ScaffoldOptions, size paneSize) string {

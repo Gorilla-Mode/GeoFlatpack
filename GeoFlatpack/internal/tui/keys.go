@@ -71,6 +71,7 @@ type detailKeyMap struct {
 	WriteFiles        key.Binding
 	RemoveLayer       key.Binding
 	RemoveOption      key.Binding
+	ColorPicker       key.Binding
 	ControlFocus      key.Binding
 	Back              key.Binding
 	Filter            key.Binding
@@ -87,6 +88,7 @@ type detailKeyMap struct {
 
 func newDetailKeyMap() detailKeyMap {
 	return detailKeyMap{
+		ColorPicker:  key.NewBinding(key.WithKeys("enter", "esc", "tab", "shift+tab", "left", "right"), key.WithHelp("Color picker", "Tab/Shift+Tab focuses Square, H, S, L, Hex, R, G, B in order or reverse. Left/Right adjusts a focused slider or RGB value without Enter. Enter activates square/slider adjustment or Hex/RGB text editing; Escape leaves it. Edits apply live. Click and drag to pick colors; alpha is always 255.")),
 		WriteFiles:   key.NewBinding(key.WithKeys("w", "W"), key.WithHelp("W", "Write enabled outputs to -o when all layers are green; inactive while editing an input")),
 		RemoveLayer:  key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace", "Remove the highlighted style layer in the style-layer selection list")),
 		RemoveOption: key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace", "Remove the highlighted included option in the styling editor, including the filtered list")),
@@ -151,6 +153,7 @@ func (k detailKeyMap) FullHelp() [][]key.Binding {
 		k.WriteFiles,
 		k.RemoveLayer,
 		k.RemoveOption,
+		k.ColorPicker,
 		k.ControlFocus,
 		k.Back,
 		k.Filter,

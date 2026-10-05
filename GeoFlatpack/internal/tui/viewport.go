@@ -7,6 +7,11 @@ import (
 )
 
 func (m *Model) refreshViewport() {
+	// Opening color Controls applies its initial color before readiness rolls
+	// up to the feature and source layer.
+	if m.screen == scaffoldScreen && m.activePane == panel.ControlsPane && !m.help.ShowAll {
+		m.currentControl()
+	}
 	m.refreshReadiness()
 	l := m.layout()
 	m.viewport.SetWidth(l.contentWidth)

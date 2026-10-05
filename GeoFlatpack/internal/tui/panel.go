@@ -17,7 +17,15 @@ func (m *Model) panel() string {
 
 	if l.headerHeight > 0 {
 		header := panel.Header(l.width, m.styles.title)
-		if m.screen == scaffoldScreen && (m.width < 120 || m.height < 24) {
+		pickerClipped := false
+		if scaffold {
+			opts := m.scaffoldOptions(l)
+			if opts.ColorPicker != nil {
+				w, h := panel.ControlsDimensions(opts)
+				pickerClipped = panel.ColorPickerGeometry(*opts.ColorPicker, w, h).Clipped(w, h)
+			}
+		}
+		if m.screen == scaffoldScreen && (m.width < 120 || m.height < 24 || pickerClipped) {
 			warning := m.styles.muted.Render("Expand terminal")
 			if lipgloss.Width(header)+3+lipgloss.Width(warning) <= l.width {
 				header += " • " + warning
@@ -81,6 +89,22 @@ func (m *Model) panel() string {
 			helpKey = key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Cancel"))
 			selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Save"))
 			hints = []key.Binding{m.keys.LeftPane, m.keys.RightPane, key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←/→", "Cursor"))}
+		}
+		if _, _, c := m.currentControl(); c != nil && c.color != nil {
+			selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Adjust / edit"))
+			if c.editing {
+				helpKey = key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Leave input"))
+				selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Finish input"))
+			} else if c.color.active {
+				helpKey = key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Leave adjustment"))
+				selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Finish adjustment"))
+				hints = []key.Binding{key.NewBinding(key.WithKeys("up", "down", "left", "right"), key.WithHelp("↑/↓/←/→", "Adjust color")), key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("Tab/⇧Tab", "Control")), m.keys.LeftPane, m.keys.RightPane}
+			} else {
+				hints = []key.Binding{key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Back to editing")), key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("Tab/⇧Tab", "Control")), m.keys.LeftPane, m.keys.RightPane}
+				if c.color.selected >= panel.PickerHue && c.color.selected <= panel.PickerLightness || c.color.selected >= panel.PickerRed && c.color.selected <= panel.PickerBlue {
+					hints = append(hints, m.keys.DecreaseSelection, m.keys.IncreaseSelection)
+				}
+			}
 		}
 	}
 	if scaffold && m.activePane == panel.FeatureStylingPane {

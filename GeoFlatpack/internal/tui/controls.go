@@ -22,6 +22,7 @@ type controlState struct {
 	editing                                 bool
 	input                                   textinput.Model
 	err                                     string
+	color                                   *colorControl
 }
 
 type controlRow struct {
@@ -62,6 +63,9 @@ func (m *Model) currentControl() (*styleLayerState, styleProperty, *controlState
 		layer.controls[p.name] = c
 	}
 	c.normalizeFocus(p)
+	if c.color != nil && m.activePane == panel.ControlsPane && m.screen == scaffoldScreen && !m.help.ShowAll && !m.writing && !layer.options[p.name].hasValue {
+		c.color.apply(layer, p)
+	}
 	return layer, p, c
 }
 
@@ -75,6 +79,14 @@ func (c *controlState) resetFocus() {
 // A shrinking form can leave a cached field position on an action, a disabled
 // row, or outside the list. Recover before rendering or indexing input fields.
 func (c *controlState) normalizeFocus(p styleProperty) {
+	if p.spec.Type == maplibre.ColorType {
+		if c.color != nil && (c.color.selected < 0 || c.color.selected >= panel.PickerControlCount) {
+			c.color.selected = 0
+			c.color.active, c.color.dragging, c.editing = false, false, false
+			c.input.Blur()
+		}
+		return
+	}
 	rows := c.rows(p)
 	invalid := c.selected < 0 || c.selected >= len(rows)
 	if !invalid {
@@ -125,6 +137,10 @@ func (c *controlState) load(p styleProperty, value any) {
 	switch p.spec.Type {
 	case maplibre.ColorType:
 		c.fields = nil
+		if c.color == nil {
+			c.color = &colorControl{}
+		}
+		c.color.load(value)
 	case maplibre.ArrayType:
 		c.fields = nil
 		// Normalize slices supplied by tests or callers as well as decoded JSON.
@@ -351,6 +367,9 @@ func (m *Model) controlsInput(msg tea.Msg) tea.Cmd {
 	if c == nil {
 		return nil
 	}
+	if c.color != nil {
+		return c.colorInput(layer, p, msg)
+	}
 	key, isKey := msg.(tea.KeyPressMsg)
 	if c.editing {
 		if isKey {
@@ -467,7 +486,7 @@ func (m *Model) controlsEditing() bool {
 		return false
 	}
 	_, _, c := m.currentControl()
-	return c != nil && c.editing
+	return c != nil && (c.editing || (c.color != nil && c.color.active))
 }
 
 func (m *Model) controlsPresentation(opts *panel.ScaffoldOptions) {
@@ -477,6 +496,20 @@ func (m *Model) controlsPresentation(opts *panel.ScaffoldOptions) {
 		if s := m.currentStyling(); s != nil && s.mode == styleEdit && s.activeLayer().style.Type == maplibre.RenderSymbol {
 			opts.ControlsEmptyText = "Choose an SVG in Styling"
 		}
+		return
+	}
+	if c.color != nil {
+		width, height := panel.ControlsDimensions(*opts)
+		geometry := panel.ColorPickerGeometry(c.color.presentation(c, p, true), width, height)
+		if c.color.selected >= panel.PickerHex && c.color.selected <= panel.PickerBlue {
+			reserved := 1
+			if c.color.selected == panel.PickerHex {
+				reserved++
+			}
+			c.input.SetWidth(max(1, geometry.Controls[c.color.selected].Width-reserved))
+		}
+		o := c.color.presentation(c, p, m.activePane == panel.ControlsPane && !m.help.ShowAll)
+		opts.ColorPicker = &o
 		return
 	}
 	rows := c.rows(p)
@@ -530,11 +563,6 @@ func (m *Model) controlsPresentation(opts *panel.ScaffoldOptions) {
 		}
 		opts.Controls = append(opts.Controls, item)
 	}
-	if p.spec.Type == maplibre.ColorType {
-		opts.Controls = append([]panel.ControlItem{{Label: "Color picker coming later", Disabled: true}}, opts.Controls...)
-		opts.SelectedControl = c.selected + 1
-	} else {
-		opts.SelectedControl = c.selected
-	}
+	opts.SelectedControl = c.selected
 	opts.FirstVisibleControl = c.firstVisible
 }

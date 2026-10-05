@@ -139,7 +139,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner, cmd = m.spinner.Update(msg)
 		}
 	case tea.WindowSizeMsg:
+		m.stopColorDragging()
 		m.width, m.height = max(1, msg.Width), max(1, msg.Height)
+	case tea.MouseClickMsg, tea.MouseMotionMsg, tea.MouseReleaseMsg:
+		if m.screen == scaffoldScreen && !m.help.ShowAll && !m.writing {
+			cmd = m.colorMouseInput(msg)
+		}
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.keys.Quit):
@@ -163,6 +168,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = false
 			m.keys.Help.SetHelp("?", "help")
 		case key.Matches(msg, m.keys.Help) && !m.controlsEditing():
+			m.stopColorDragging()
 			m.help.ShowAll = !m.help.ShowAll
 			m.viewport.GotoTop()
 			if m.help.ShowAll {
@@ -171,8 +177,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.keys.Help.SetHelp("?", "help")
 			}
 		case key.Matches(msg, m.keys.RightPane) && m.screen == scaffoldScreen && !m.help.ShowAll:
+			m.stopColorDragging()
 			m.activePane = (m.activePane + 1) % panel.PaneCount
 		case key.Matches(msg, m.keys.LeftPane) && m.screen == scaffoldScreen && !m.help.ShowAll:
+			m.stopColorDragging()
 			m.activePane = (m.activePane + panel.PaneCount - 1) % panel.PaneCount
 		case key.Matches(msg, m.keys.Back) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.ControlsPane && !m.controlsEditing():
 			m.activePane = panel.FeatureStylingPane
@@ -235,5 +243,10 @@ func (m *Model) View() tea.View {
 	m.refreshViewport()
 	view := tea.NewView(m.panel())
 	view.AltScreen = true
+	if m.screen == scaffoldScreen && !m.help.ShowAll && !m.writing {
+		if _, ok := m.colorPickerOptions(); ok {
+			view.MouseMode = tea.MouseModeAllMotion
+		}
+	}
 	return view
 }

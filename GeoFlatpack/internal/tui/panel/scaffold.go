@@ -59,6 +59,7 @@ type ScaffoldOptions struct {
 	SelectedControl      int
 	FirstVisibleControl  int
 	ControlsEmptyText    string
+	ColorPicker          *ColorPickerOptions
 }
 
 type paneSize struct {
@@ -67,20 +68,22 @@ type paneSize struct {
 }
 
 type scaffoldLayout struct {
-	gap      int
-	columns  [5]paneSize
-	preview  paneSize
-	controls paneSize
-	split    bool
+	gap              int
+	columns          [5]paneSize
+	preview          paneSize
+	controls         paneSize
+	legacyRightWidth int
+	split            bool
 }
 
 func newScaffoldLayout(width, height int) scaffoldLayout {
 	width, height = max(0, width), max(0, height)
 	l := scaffoldLayout{gap: min(1, width/4)}
 	available := width - 4*l.gap
+	l.legacyRightWidth = available - 4*(available*16/100)
 	used := 0
 	for i := 0; i < 4; i++ {
-		w := available * 16 / 100
+		w := available * 12 / 100
 		l.columns[i] = paneSize{w, height}
 		used += w
 	}
@@ -90,11 +93,12 @@ func newScaffoldLayout(width, height int) scaffoldLayout {
 	interior := l.preview.interior()
 	if interior.width > 0 && interior.height >= 3 {
 		l.split = true
-		// Reserve the shared divider, then split the heading/content rows.
-		// Preview gets the extra row when the remaining height is odd.
+		// Reserve the shared divider. Give Layers/Controls 60% of the rows,
+		// about 20% more height than the previous even split.
 		remaining := interior.height - 1
-		l.preview.height = (remaining + 1) / 2
-		l.controls = paneSize{l.preview.width, remaining / 2}
+		controlsHeight := min(remaining-1, (remaining*3+2)/5)
+		l.preview.height = remaining - controlsHeight
+		l.controls = paneSize{l.preview.width, controlsHeight}
 		if interior != l.columns[4] {
 			l.preview.height += 2 // top border and shared divider
 			l.controls.height++   // bottom border

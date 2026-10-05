@@ -43,7 +43,8 @@ func newLowerLayout(opts ScaffoldOptions, l scaffoldLayout) lowerLayout {
 	}
 	lower := lowerLayout{box: box, interior: paneInterior(l.controls, box)}
 	lower.controls = lower.interior
-	w := (lower.interior.width - 1) / 3
+	legacySize := paneSize{l.legacyRightWidth, l.controls.height}
+	w := max(0, (paneInterior(legacySize, box).width-1)/3)
 	stack := paneSize{w, lower.interior.height}
 	controls := paneSize{lower.interior.width - w - 1, lower.interior.height}
 	if opts.ShowStack && w-2*listInset(stack) >= 3 && controls.width-2*listInset(controls) >= 3 {
