@@ -41,6 +41,7 @@ type previewState struct {
 	content                             string
 	renderCancel                        context.CancelFunc
 	suspended                           bool
+	sample                              bool
 	representatives                     map[representativeKey]representativeChoice
 	images                              map[string]cachedPreview
 	imageSize                           [4]int // pane columns/rows and terminal cell pixels
@@ -242,7 +243,7 @@ func (m *Model) previewRequest() (preview.Request, string, string, error) {
 		return preview.Request{}, "", "", fmt.Errorf("No layers loaded")
 	}
 	layer := layers[m.selectedLayer]
-	request := preview.Request{Input: maplibre.LayerStyle{Data: layer.Data, SourceID: layer.SourceID, Styles: make(map[maplibre.StyleGroup][]maplibre.RenderLayerStyle)}, Icons: m.session.Icons(), Basemap: preview.Basemap}
+	request := preview.Request{Input: maplibre.LayerStyle{Data: layer.Data, SourceID: layer.SourceID, Styles: make(map[maplibre.StyleGroup][]maplibre.RenderLayerStyle)}, Icons: m.session.Icons(), Basemap: preview.Basemap, Sample: s.sample}
 	if request.Input.SourceID == "" {
 		request.Input.SourceID = "preview-source"
 	}
@@ -295,7 +296,7 @@ func (m *Model) previewRequest() (preview.Request, string, string, error) {
 		return request, "", "", fmt.Errorf("Expand terminal for preview")
 	}
 	request.Width, request.Height = min(4096, r.Width*s.cellWidth), min(4096, r.Height*s.cellHeight)
-	target := fmt.Sprintf("%d/%d/%d/%d", m.selectedLayer, categoryIndex, groupIndex, choice.index)
+	target := fmt.Sprintf("%d/%d/%d/%d/%t", m.selectedLayer, categoryIndex, groupIndex, choice.index, s.sample)
 	raw, err := json.Marshal([]any{target, request.Width, request.Height, r.Width, r.Height, string(group.GeometryType), group.Category.String(), group.Category.FilterValue(), stack})
 	if err != nil {
 		return request, "", "", err
@@ -375,6 +376,7 @@ func (m *Model) refreshPreview() tea.Cmd {
 
 func (m *Model) previewPresentation(opts *panel.ScaffoldOptions) {
 	if s := m.preview; s != nil {
+		opts.PreviewSample = s.sample
 		opts.PreviewContent, opts.PreviewWarning = s.message, s.warning
 		if s.content != "" && !s.suspended {
 			opts.PreviewContent, opts.PreviewImage = s.content, true

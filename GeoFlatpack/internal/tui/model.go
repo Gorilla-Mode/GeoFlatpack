@@ -164,6 +164,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.quitCommand()
 		case m.writing:
 			// The writer exclusively owns the session until its result arrives.
+		case key.Matches(msg, m.keys.PreviewSample) && m.screen == scaffoldScreen && !m.help.ShowAll && !m.controlsEditing() && m.preview != nil && m.preview.phase == 2:
+			m.preview.sample = !m.preview.sample
 		case key.Matches(msg, m.keys.WriteFiles) && m.screen == scaffoldScreen && !m.help.ShowAll && !m.controlsEditing():
 			cmd = m.startWrite()
 		case key.Matches(msg, m.keys.Select) && m.screen == completionScreen:

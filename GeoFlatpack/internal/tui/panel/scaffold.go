@@ -62,6 +62,7 @@ type ScaffoldOptions struct {
 	ColorPicker          *ColorPickerOptions
 	PreviewContent       string
 	PreviewWarning       string
+	PreviewSample        bool
 	PreviewImage         bool
 }
 

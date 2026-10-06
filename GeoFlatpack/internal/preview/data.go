@@ -24,6 +24,7 @@ type Request struct {
 	Group         *maplibre.StyleGroup
 	Width, Height int
 	Basemap       string
+	Sample        bool
 }
 
 type document struct {
@@ -113,6 +114,13 @@ func prepareCached(ctx context.Context, request Request, cache *dataCache) (docu
 		}
 		if cache != nil {
 			*cache = dataCache{source: input.Data, field: input.CategoryField, group: group, index: index, companions: companions, marker: input.VertexMarker, data: data}
+		}
+	}
+	if request.Sample {
+		var err error
+		data, err = sampleGeometry(data, group.GeometryType, input.VertexMarker)
+		if err != nil {
+			return document{}, err
 		}
 	}
 	style, err := maplibre.BuildMapLibreCollectionStyle("preview", []maplibre.LayerStyle{input}, request.Icons)

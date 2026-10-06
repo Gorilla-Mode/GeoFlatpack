@@ -32,6 +32,9 @@ func PreviewRegion(opts ScaffoldOptions) PickerRect {
 
 func populatePreview(p *paneOptions, opts ScaffoldOptions, size paneSize) {
 	p.heading = "Preview"
+	if opts.PreviewSample {
+		p.heading += " · Sample"
+	}
 	if opts.PreviewWarning != "" {
 		p.heading += " · " + opts.ScrollHintStyle.Foreground(lipgloss.Color("3")).Render(opts.PreviewWarning)
 	}

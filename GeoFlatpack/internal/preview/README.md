@@ -27,8 +27,16 @@ Geometry is reprojected independently to WGS84. Lines and polygons fit tightly
 with a maximum zoom of 22; points use a maximum zoom of 16. Circles, strokes, and
 SVGs keep their configured pixel sizes. Geometry is cached across style edits.
 
-Each visited feature target retains its latest successfully uploaded image for
-the current session. Returning with unchanged styling restores its image and
+Press D outside input editing to toggle compact sample geometry for all previews
+in the current session. The header shows `Preview · Sample`. Samples stay near
+the real representative's centre: one point, a regular hexagon 100 metres across
+opposite vertices, or a five-vertex line 150 metres wide with alternating vertical
+offsets of ±25 metres. Samples keep the original properties, full style stack,
+and pixel sizes. SVGs render at the single point, six distinct hexagon vertices,
+or five line vertices. Sample geometry never changes loaded data or exports.
+
+Each visited feature target and geometry mode retains its latest successfully
+uploaded image for the current session. Returning with unchanged styling restores its image and
 warning immediately, without another render or upload. Valid live edits replace
 that target's cached image after a successful upload; stale or failed renders do
 not replace it. Resizing the preview or changing terminal cell dimensions clears

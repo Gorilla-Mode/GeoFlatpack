@@ -3,6 +3,7 @@ package tui
 import "charm.land/bubbles/v2/key"
 
 type keyMap struct {
+	PreviewSample     key.Binding
 	WriteFiles        key.Binding
 	RemoveLayer       key.Binding
 	RemoveOption      key.Binding
@@ -21,11 +22,12 @@ type keyMap struct {
 
 func newKeyMap() keyMap {
 	return keyMap{
-		WriteFiles:   key.NewBinding(key.WithKeys("w", "W"), key.WithHelp("W", "Write files")),
-		RemoveLayer:  key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "Remove layer")),
-		RemoveOption: key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "Remove option")),
-		Back:         key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Style layers")),
-		Filter:       key.NewBinding(key.WithKeys("h"), key.WithHelp("h", "Filter options")),
+		PreviewSample: key.NewBinding(key.WithKeys("d", "D"), key.WithHelp("D", "Sample / real preview")),
+		WriteFiles:    key.NewBinding(key.WithKeys("w", "W"), key.WithHelp("W", "Write files")),
+		RemoveLayer:   key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "Remove layer")),
+		RemoveOption:  key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "Remove option")),
+		Back:          key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Style layers")),
+		Filter:        key.NewBinding(key.WithKeys("h"), key.WithHelp("h", "Filter options")),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("?", "help"),
@@ -68,6 +70,7 @@ func newKeyMap() keyMap {
 }
 
 type detailKeyMap struct {
+	PreviewSample     key.Binding
 	WriteFiles        key.Binding
 	RemoveLayer       key.Binding
 	RemoveOption      key.Binding
@@ -88,13 +91,14 @@ type detailKeyMap struct {
 
 func newDetailKeyMap() detailKeyMap {
 	return detailKeyMap{
-		ColorPicker:  key.NewBinding(key.WithKeys("enter", "esc", "tab", "shift+tab", "left", "right"), key.WithHelp("Color picker", "Tab/Shift+Tab focuses Square, H, S, L, Hex, R, G, B in order or reverse. Left/Right adjusts a focused slider or RGB value without Enter. Enter activates square/slider adjustment or Hex/RGB text editing; Escape leaves it. Edits apply live. Click and drag to pick colors; alpha is always 255.")),
-		WriteFiles:   key.NewBinding(key.WithKeys("w", "W"), key.WithHelp("W", "Write enabled outputs to -o when all layers are green; inactive while editing an input")),
-		RemoveLayer:  key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace", "Remove the highlighted style layer in the style-layer selection list")),
-		RemoveOption: key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace", "Remove the highlighted included option in the styling editor, including the filtered list")),
-		ControlFocus: key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("Tab / Shift+Tab", "Focus the next or previous input, adjustment button, or action in Controls")),
-		Back:         key.NewBinding(key.WithKeys("esc"), key.WithHelp("Escape", "Cancel input editing; from Controls return to Styling; otherwise return to style layers or SVG layer types")),
-		Filter:       key.NewBinding(key.WithKeys("h"), key.WithHelp("H", "Show all style options or only included options; inactive for SVG editing")),
+		PreviewSample: key.NewBinding(key.WithKeys("d", "D"), key.WithHelp("D", "Toggle compact sample geometry or real geometry in Preview for all features; inactive while editing an input")),
+		ColorPicker:   key.NewBinding(key.WithKeys("enter", "esc", "tab", "shift+tab", "left", "right"), key.WithHelp("Color picker", "Tab/Shift+Tab focuses Square, H, S, L, Hex, R, G, B in order or reverse. Left/Right adjusts a focused slider or RGB value without Enter. Enter activates square/slider adjustment or Hex/RGB text editing; Escape leaves it. Edits apply live. Click and drag to pick colors; alpha is always 255.")),
+		WriteFiles:    key.NewBinding(key.WithKeys("w", "W"), key.WithHelp("W", "Write enabled outputs to -o when all layers are green; inactive while editing an input")),
+		RemoveLayer:   key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace", "Remove the highlighted style layer in the style-layer selection list")),
+		RemoveOption:  key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace", "Remove the highlighted included option in the styling editor, including the filtered list")),
+		ControlFocus:  key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("Tab / Shift+Tab", "Focus the next or previous input, adjustment button, or action in Controls")),
+		Back:          key.NewBinding(key.WithKeys("esc"), key.WithHelp("Escape", "Cancel input editing; from Controls return to Styling; otherwise return to style layers or SVG layer types")),
+		Filter:        key.NewBinding(key.WithKeys("h"), key.WithHelp("H", "Show all style options or only included options; inactive for SVG editing")),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("Question mark", "Show or hide the complete keyboard reference; type a question mark while editing an input"),
@@ -150,6 +154,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 
 func (k detailKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{
+		k.PreviewSample,
 		k.WriteFiles,
 		k.RemoveLayer,
 		k.RemoveOption,

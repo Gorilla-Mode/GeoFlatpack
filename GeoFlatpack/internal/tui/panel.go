@@ -139,6 +139,9 @@ func (m *Model) panel() string {
 		}
 	}
 	primary := []key.Binding{helpKey, m.keys.Quit, selectKey}
+	if scaffold && m.preview != nil && m.preview.phase == 2 && !m.controlsEditing() {
+		hints = append([]key.Binding{m.keys.PreviewSample}, hints...)
+	}
 	if m.canWrite() {
 		hints = append([]key.Binding{m.keys.WriteFiles}, hints...)
 	}
