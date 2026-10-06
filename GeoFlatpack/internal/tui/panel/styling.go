@@ -147,7 +147,9 @@ func renderUpper(opts ScaffoldOptions, l scaffoldLayout, lower lowerLayout, prev
 		size: infoSize, heading: "Info", box: lipgloss.NewStyle(), title: opts.MutedStyle,
 		content: clippedInfo(opts.InfoContent, width, height, opts.ListStyles.Detail), contentInset: listInset(infoSize), contentGap: listHeadingGap(infoSize),
 	})
-	previewView := renderPane(paneOptions{size: paneSize{lower.controls.width, interior.height}, heading: "Preview", box: lipgloss.NewStyle(), title: opts.TitleStyle})
+	previewPane := paneOptions{size: paneSize{lower.controls.width, interior.height}, heading: "Preview", box: lipgloss.NewStyle(), title: opts.TitleStyle}
+	populatePreview(&previewPane, opts, previewPane.size)
+	previewView := renderPane(previewPane)
 	separator := lipgloss.NewStyle().Foreground(opts.InactivePaneStyle.GetBorderTopForeground()).
 		Render(strings.TrimSuffix(strings.Repeat("│\n", interior.height), "\n"))
 	content := lipgloss.JoinHorizontal(lipgloss.Top, info, separator, previewView)

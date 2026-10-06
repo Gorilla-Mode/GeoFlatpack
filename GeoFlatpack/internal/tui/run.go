@@ -16,8 +16,12 @@ func Run(opts app.Options, in io.Reader, out io.Writer) error {
 }
 
 func runModel(model *Model, in io.Reader, out io.Writer, options ...tea.ProgramOption) (err error) {
+	model.preview = newPreviewState()
 	defer func() {
-		err = errors.Join(err, model.writeOperation.finish(), model.preparation.finish())
+		err = errors.Join(err, model.preview.close(), model.writeOperation.finish(), model.preparation.finish())
+		if cleanup := model.preview.cleanupImages(); cleanup != "" {
+			_, _ = io.WriteString(out, cleanup)
+		}
 	}()
 
 	options = append(options, tea.WithInput(in), tea.WithOutput(out))

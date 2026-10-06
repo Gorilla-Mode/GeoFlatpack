@@ -53,6 +53,7 @@ type Model struct {
 	writing           bool
 	writeStatus       string
 	writeErr          error
+	preview           *previewState
 }
 
 var _ tea.Model = (*Model)(nil)
@@ -86,11 +87,16 @@ func newModel(opts app.Options, prepare prepareFunc) *Model {
 }
 
 func (m *Model) Init() tea.Cmd {
-	return tea.Batch(m.preparation.command(m.Options), m.spinner.Tick)
+	var graphics tea.Cmd
+	if m.preview != nil {
+		graphics = m.preview.init()
+	}
+	return tea.Batch(m.preparation.command(m.Options), m.spinner.Tick, graphics)
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	graphics := m.previewInput(msg)
 	switch msg := msg.(type) {
 	case writeDoneMsg:
 		if msg.operation == nil || msg.operation != m.writeOperation {
@@ -109,13 +115,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.writeStatus = "Write failed: " + msg.err.Error()
 		}
 		if m.quitting {
-			return m, tea.Quit
+			return m, m.quitCommand()
 		}
 	case preparedMsg:
 		m.elapsed, m.err = msg.elapsed, msg.err
 
 		if m.quitting {
-			return m, tea.Quit
+			return m, m.quitCommand()
 		}
 		if msg.err != nil {
 			m.screen = failureScreen
@@ -155,7 +161,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				break
 			}
-			return m, tea.Quit
+			return m, m.quitCommand()
 		case m.writing:
 			// The writer exclusively owns the session until its result arrives.
 		case key.Matches(msg, m.keys.WriteFiles) && m.screen == scaffoldScreen && !m.help.ShowAll && !m.controlsEditing():
@@ -236,7 +242,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 	m.refreshViewport()
-	return m, cmd
+	return m, tea.Batch(cmd, graphics, m.refreshPreview())
 }
 
 func (m *Model) View() tea.View {

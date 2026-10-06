@@ -189,5 +189,6 @@ func (m *Model) scaffoldOptions(l panelLayout) panel.ScaffoldOptions {
 	}
 	m.stylingPresentation(&opts)
 	m.controlsPresentation(&opts)
+	m.previewPresentation(&opts)
 	return opts
 }

@@ -60,6 +60,9 @@ type ScaffoldOptions struct {
 	FirstVisibleControl  int
 	ControlsEmptyText    string
 	ColorPicker          *ColorPickerOptions
+	PreviewContent       string
+	PreviewWarning       string
+	PreviewImage         bool
 }
 
 type paneSize struct {
@@ -171,6 +174,7 @@ func Scaffold(opts ScaffoldOptions) string {
 
 func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {
 	preview := paneOptions{size: l.preview, heading: "Preview", box: opts.PaneStyle, title: opts.TitleStyle}
+	populatePreview(&preview, opts, paneInterior(l.preview, preview.box))
 	if !l.split {
 		return renderPane(preview)
 	}

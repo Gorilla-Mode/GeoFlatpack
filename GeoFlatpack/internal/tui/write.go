@@ -1,9 +1,7 @@
 package tui
 
 import (
-	"encoding/json"
 	"fmt"
-	"maps"
 	"sync"
 
 	"GeoFlatpack/internal/app"
@@ -96,47 +94,13 @@ func (m *Model) styleSelections() ([]app.StyleSelection, error) {
 			}
 			stack := make([]maplibre.RenderLayerStyle, 0, len(state.layers))
 			for _, layer := range state.layers {
-				render := layer.style
-				render.Paint = maps.Clone(render.Paint)
-				render.Layout = maps.Clone(render.Layout)
-				sections := make(map[string]maplibre.StyleSection, len(layer.properties))
-				for _, p := range layer.properties {
-					sections[p.name] = p.section
-				}
-				for name, draft := range layer.options {
-					if sections[name] == maplibre.LayoutSection {
-						if !draft.included {
-							delete(render.Layout, name)
-							continue
-						}
-						if render.Layout == nil {
-							render.Layout = make(map[string]any)
-						}
-						render.Layout[name] = draft.value
-					} else {
-						if !draft.included {
-							delete(render.Paint, name)
-							continue
-						}
-						if render.Paint == nil {
-							render.Paint = make(maplibre.Paint)
-						}
-						render.Paint[name] = draft.value
-					}
+				render, err := layer.renderSnapshot(false)
+				if err != nil {
+					return nil, fmt.Errorf("copy layer %q styling: %w", m.layers[i].Name, err)
 				}
 				stack = append(stack, render)
 			}
-			// JSON is the writer's value format. Round-trip the stack to copy all
-			// nested arrays/objects, leaving the mutable editor maps untouched.
-			data, err := json.Marshal(stack)
-			if err != nil {
-				return nil, fmt.Errorf("copy layer %q styling: %w", m.layers[i].Name, err)
-			}
-			var snapshot []maplibre.RenderLayerStyle
-			if err := json.Unmarshal(data, &snapshot); err != nil {
-				return nil, err
-			}
-			selection.Styles[group] = snapshot
+			selection.Styles[group] = stack
 		}
 		selections[i] = selection
 	}
