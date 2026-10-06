@@ -45,6 +45,7 @@ Then run it:
 | `-f`                | Stylesheet format: `maplibre` or `sld`                                      | `maplibre` | No        |
 | `-h`                | Show help                                                                   | `false`    | No        |
 | `-v`                | Verbose output                                                              | `false`    | No        |
+| `--cli`             | Select the existing CLI interface                                           | `false`    | No        |
 | `--svg-dir`         | Directory of SVG icons available in the styling menu                        | —          | No        |
 | `--write-fgb`       | Write one FlatGeobuf output file per input layer                            | `true`     | No        |
 | `--write-style`     | Prompt per layer and write one shared `.gen.maplibre.json` stylesheet       | `true`     | No        |
@@ -103,11 +104,14 @@ Sources are empty GeoJSON placeholders for the consuming application to populate
 
 ## Dependencies
 
-| Module                          | Version                 | Purpose                                                          |
-|---------------------------------|-------------------------|------------------------------------------------------------------|
-| `github.com/airbusgeo/godal`    | `v0.0.18`               | Provides GDAL access for GML conversion and FlatGeobuf handling. |
-| `github.com/gogama/flatgeobuf`  | `v1.0.1`                | Reads and parses FlatGeobuf data.                                |
-| `github.com/google/flatbuffers` | `v23.5.26+incompatible` | Underlying serialization dependency used by FlatGeobuf.          |
+| Module                          | Version                         | Purpose                                                          |
+|---------------------------------|---------------------------------|------------------------------------------------------------------|
+| `charm.land/bubbles/v2`         | `v2.0.0`                        | Provides the TUI help component and key bindings.                |
+| `charm.land/bubbletea/v2`       | `v2.0.10`                       | Runs the terminal user interface.                                |
+| `charm.land/lipgloss/v2`        | `v2.0.0`                        | Provides TUI layout and styling.                                 |
+| `github.com/airbusgeo/godal`    | `v0.0.18`                       | Provides GDAL access for GML conversion and FlatGeobuf handling. |
+| `github.com/gogama/flatgeobuf`  | `v1.0.1`                        | Reads and parses FlatGeobuf data.                                |
+| `github.com/google/flatbuffers` | `v25.12.19+incompatible`        | Underlying serialization dependency used by FlatGeobuf.          |
 
 
 ## Development status
