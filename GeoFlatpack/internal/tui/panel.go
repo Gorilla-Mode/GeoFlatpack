@@ -2,7 +2,6 @@ package tui
 
 import (
 	"GeoFlatpack/internal/tui/panel"
-	"GeoFlatpack/style/maplibre"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -117,22 +116,24 @@ func (m *Model) panel() string {
 				back := m.keys.Back
 				if s.mode == styleIcons {
 					back = key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Layer types"))
+					if s.changingIcon {
+						back = key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "SVG options"))
+					}
 				}
 				contextHints = append(contextHints, back)
 			}
 			if s.mode == styleEdit {
-				if s.activeLayer().style.Type == maplibre.RenderSymbol {
-					selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Use SVG"))
-				} else {
-					layer := s.activeLayer()
-					if property, ok := layer.currentProperty(); ok && layer.options[property.name].included {
-						contextHints = append(contextHints, m.keys.RemoveOption)
-					}
-					contextHints = append(contextHints, m.keys.Filter)
-					selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Toggle option"))
-					if s.activeLayer().includedOnly {
-						selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Edit option"))
-					}
+				layer := s.activeLayer()
+				if property, ok := layer.currentProperty(); ok && layer.options[property.name].included {
+					contextHints = append(contextHints, m.keys.RemoveOption)
+				}
+				contextHints = append(contextHints, m.keys.Filter)
+				selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Toggle option"))
+				if s.activeLayer().includedOnly {
+					selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Edit option"))
+				}
+				if layer.optionOffset() > 0 && layer.selected == 0 {
+					selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Change SVG"))
 				}
 			}
 			hints = append(contextHints, hints...)

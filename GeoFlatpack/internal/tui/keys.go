@@ -98,7 +98,7 @@ func newDetailKeyMap() detailKeyMap {
 		RemoveOption:  key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace", "Remove the highlighted included option in the styling editor, including the filtered list")),
 		ControlFocus:  key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("Tab / Shift+Tab", "Focus the next or previous input, adjustment button, or action in Controls")),
 		Back:          key.NewBinding(key.WithKeys("esc"), key.WithHelp("Escape", "Cancel input editing; from Controls return to Styling; otherwise return to style layers or SVG layer types")),
-		Filter:        key.NewBinding(key.WithKeys("h"), key.WithHelp("H", "Show all style options or only included options; inactive for SVG editing")),
+		Filter:        key.NewBinding(key.WithKeys("h"), key.WithHelp("H", "Show all style options or only included options; Change SVG remains available")),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("Question mark", "Show or hide the complete keyboard reference; type a question mark while editing an input"),

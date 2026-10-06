@@ -27,6 +27,12 @@ Geometry is reprojected independently to WGS84. Lines and polygons fit tightly
 with a maximum zoom of 22; points use a maximum zoom of 16. Circles, strokes, and
 SVGs keep their configured pixel sizes. Geometry is cached across style edits.
 
+SVG editing starts with `Change SVG`, followed by non-SDF icon layout and paint
+options. Enter opens the icon chooser; Escape returns without switching icons.
+Size, rotation, offsets, opacity, overlap, alignment and visibility use the same
+Controls and export snapshots as other styles. Color and halos require SDF and
+are excluded. Changing the SVG preserves its option values.
+
 Press D outside input editing to toggle compact sample geometry for all previews
 in the current session. The header shows `Preview · Sample`. Samples stay near
 the real representative's centre: one point, a regular hexagon 100 metres across

@@ -54,6 +54,31 @@ var cachedStylingCatalog = sync.OnceValue(func() stylingCatalog {
 		}
 		sort.Slice(catalog.properties[kind], func(i, j int) bool { return catalog.properties[kind][i].name < catalog.properties[kind][j].name })
 	}
+	for _, section := range []maplibre.StyleSection{maplibre.LayoutSection, maplibre.PaintSection} {
+		properties, err := spec.Properties(maplibre.RenderSymbol, section)
+		if err != nil {
+			catalog.err = err
+			return catalog
+		}
+		for name, property := range properties {
+			base := strings.TrimSuffix(name, "-transition")
+			switch base {
+			case "icon-size", "icon-rotate", "icon-offset", "icon-anchor", "icon-padding", "icon-allow-overlap", "icon-overlap", "icon-ignore-placement", "icon-rotation-alignment", "icon-pitch-alignment", "visibility", "icon-opacity", "icon-translate", "icon-translate-anchor":
+			default:
+				continue
+			}
+			// Match the export generator's effective defaults.
+			if name == "icon-size" {
+				property.Default = json.RawMessage(`0.5`)
+			} else if name == "icon-allow-overlap" {
+				property.Default = json.RawMessage(`true`)
+			}
+			catalog.properties[maplibre.RenderSymbol] = append(catalog.properties[maplibre.RenderSymbol], styleProperty{name, section, property})
+		}
+	}
+	sort.Slice(catalog.properties[maplibre.RenderSymbol], func(i, j int) bool {
+		return catalog.properties[maplibre.RenderSymbol][i].name < catalog.properties[maplibre.RenderSymbol][j].name
+	})
 	return catalog
 })
 
@@ -94,6 +119,7 @@ type stylingState struct {
 	typeSelected, typeFirstVisible int
 	iconSelected, iconFirstVisible int
 	stackFirstVisible              int
+	changingIcon                   bool
 }
 
 // status is shared by stack indicators and the parent feature's readiness.
@@ -179,15 +205,7 @@ func (m *Model) iconNames() []string {
 	return names
 }
 
-func (m *Model) currentIcon(layer *styleLayerState) (string, bool) {
-	names := m.iconNames()
-	if len(names) == 0 {
-		return "", false
-	}
-	return names[panel.MoveListSelection(layer.selected, 0, len(names))], true
-}
-
-// Add only confirmed layers; SVG Edit starts with its current catalog entry.
+// Add only confirmed layers; SVG Edit starts at the Change SVG action.
 func (m *Model) addStyleLayer(s *stylingState, kind maplibre.RenderType, iconName string) {
 	layer := &styleLayerState{
 		style: maplibre.RenderLayerStyle{Type: kind}, properties: m.stylingCatalog.properties[kind],
@@ -196,8 +214,6 @@ func (m *Model) addStyleLayer(s *stylingState, kind maplibre.RenderType, iconNam
 	if kind == maplibre.RenderSymbol {
 		layer.style.IconName = iconName
 		layer.style.Layout = map[string]any{"icon-image": iconName, "symbol-placement": "point"}
-		names := m.iconNames()
-		layer.selected = panel.MoveListSelection(sort.SearchStrings(names, iconName), 0, len(names))
 	}
 	s.layers = append(s.layers, layer)
 	s.active, s.mode = len(s.layers)-1, styleEdit
@@ -303,17 +319,32 @@ func (l *styleLayerState) visibleProperties() []styleProperty {
 
 func (l *styleLayerState) currentProperty() (styleProperty, bool) {
 	properties := l.visibleProperties()
-	if len(properties) == 0 {
+	index := l.selected - l.optionOffset()
+	if len(properties) == 0 || index < 0 {
 		return styleProperty{}, false
 	}
-	return properties[panel.MoveListSelection(l.selected, 0, len(properties))], true
+	return properties[panel.MoveListSelection(index, 0, len(properties))], true
+}
+
+func (l *styleLayerState) optionOffset() int {
+	if l.style.Type == maplibre.RenderSymbol {
+		return 1 // Change SVG stays first, independently of the option filter.
+	}
+	return 0
 }
 
 // Preserve the current name when filtering; otherwise choose its next neighbor.
 func (l *styleLayerState) recoverSelection(previous string) {
+	if previous == "" && l.optionOffset() > 0 {
+		l.selected = 0
+		return
+	}
 	properties := l.visibleProperties()
 	index := sort.Search(len(properties), func(i int) bool { return properties[i].name >= previous })
-	l.selected = panel.MoveListSelection(index, 0, len(properties))
+	l.selected = panel.MoveListSelection(index, 0, len(properties)) + l.optionOffset()
+	if len(properties) == 0 {
+		l.selected = 0
+	}
 }
 
 func (m *Model) stylingInput(msg tea.KeyPressMsg) {
@@ -325,7 +356,7 @@ func (m *Model) stylingInput(msg tea.KeyPressMsg) {
 	case "backspace":
 		if s.mode == styleEdit {
 			layer := s.activeLayer()
-			if layer == nil || layer.style.Type == maplibre.RenderSymbol {
+			if layer == nil {
 				return
 			}
 			if property, ok := layer.currentProperty(); ok {
@@ -346,14 +377,16 @@ func (m *Model) stylingInput(msg tea.KeyPressMsg) {
 		} else if s.mode == styleTypes {
 			s.mode = styleSelection
 		} else if s.mode == styleIcons {
-			s.mode = styleTypes
+			if s.changingIcon {
+				s.mode = styleEdit
+			} else {
+				s.mode = styleTypes
+			}
+			s.changingIcon = false
 		}
 	case "h":
 		if s.mode == styleEdit {
 			layer := s.activeLayer()
-			if layer.style.Type == maplibre.RenderSymbol {
-				return
-			}
 			property, _ := layer.currentProperty()
 			layer.includedOnly = !layer.includedOnly
 			layer.recoverSelection(property.name)
@@ -372,10 +405,7 @@ func (m *Model) stylingInput(msg tea.KeyPressMsg) {
 			s.selected = panel.MoveListSelection(s.selected, delta, len(s.layers)+1)
 		case styleEdit:
 			layer := s.activeLayer()
-			count := len(layer.visibleProperties())
-			if layer.style.Type == maplibre.RenderSymbol {
-				count = len(m.iconNames())
-			}
+			count := len(layer.visibleProperties()) + layer.optionOffset()
 			layer.selected = panel.MoveListSelection(layer.selected, delta, count)
 		}
 	case "enter":
@@ -388,6 +418,7 @@ func (m *Model) stylingInput(msg tea.KeyPressMsg) {
 			kind := types[panel.MoveListSelection(s.typeSelected, 0, len(types))]
 			if kind == maplibre.RenderSymbol {
 				s.mode = styleIcons
+				s.changingIcon = false
 				return
 			}
 			m.addStyleLayer(s, kind, "")
@@ -396,7 +427,17 @@ func (m *Model) stylingInput(msg tea.KeyPressMsg) {
 			if len(names) == 0 {
 				return
 			}
-			m.addStyleLayer(s, maplibre.RenderSymbol, names[panel.MoveListSelection(s.iconSelected, 0, len(names))])
+			name := names[panel.MoveListSelection(s.iconSelected, 0, len(names))]
+			if s.changingIcon {
+				layer := s.activeLayer()
+				if layer.style.Layout == nil {
+					layer.style.Layout = make(map[string]any)
+				}
+				layer.style.IconName, layer.style.Layout["icon-image"] = name, name
+				s.mode, s.changingIcon = styleEdit, false
+			} else {
+				m.addStyleLayer(s, maplibre.RenderSymbol, name)
+			}
 		case styleSelection:
 			if s.selected >= len(s.layers) {
 				s.mode = styleTypes
@@ -405,14 +446,10 @@ func (m *Model) stylingInput(msg tea.KeyPressMsg) {
 			s.active, s.mode = s.displayOrder()[s.selected], styleEdit
 		case styleEdit:
 			layer := s.activeLayer()
-			if layer.style.Type == maplibre.RenderSymbol {
-				if name, ok := m.currentIcon(layer); ok {
-					layer.style.IconName = name
-					if layer.style.Layout == nil {
-						layer.style.Layout = make(map[string]any)
-					}
-					layer.style.Layout["icon-image"] = name
-				}
+			if layer.optionOffset() > 0 && layer.selected == 0 {
+				s.mode, s.changingIcon = styleIcons, true
+				s.iconSelected = panel.MoveListSelection(sort.SearchStrings(m.iconNames(), layer.style.IconName), 0, len(m.iconNames()))
+				s.iconFirstVisible = 0
 				return
 			}
 			if property, ok := layer.currentProperty(); ok {
@@ -452,9 +489,16 @@ func (m *Model) stylingPresentation(opts *panel.ScaffoldOptions) {
 	case styleIcons:
 		opts.StylingHeading, opts.StylingEmptyText = "Choose SVG icon", "No SVG icons loaded"
 		for _, name := range m.iconNames() {
-			opts.Styling = append(opts.Styling, panel.ListItem{Name: name, Detail: "Enter to use"})
+			item := panel.ListItem{Name: name, Detail: "Enter to use"}
+			if s.changingIcon && name == s.activeLayer().style.IconName {
+				item.Status, item.Detail = panel.ListActive, "Current SVG"
+			}
+			opts.Styling = append(opts.Styling, item)
 		}
 		opts.SelectedStyling, opts.FirstVisibleStyling = s.iconSelected, s.iconFirstVisible
+		if s.changingIcon {
+			opts.InfoContent = "Current SVG: " + displayIconName(s.activeLayer().style.IconName) + "\n\nEnter to use the highlighted SVG.\nEsc to return without changing it."
+		}
 	case styleSelection:
 		opts.StylingHeading = "Style layers"
 		opts.Styling = append(append([]panel.ListItem(nil), opts.Stack...), panel.ListItem{Name: "Add layer", Detail: "Choose type", Status: panel.ListAdd})
@@ -467,51 +511,35 @@ func (m *Model) stylingPresentation(opts *panel.ScaffoldOptions) {
 		layer := s.activeLayer()
 		opts.StylingHeading = "Edit " + renderTypeLabel(layer.style.Type)
 		if layer.style.Type == maplibre.RenderSymbol {
-			opts.StylingEmptyText = "No SVG icons loaded"
-			for _, name := range m.iconNames() {
-				item := panel.ListItem{Name: name, Detail: "Enter to use", Children: []string{"Type: SVG"}}
-				if name == layer.style.IconName {
-					item.Status, item.Detail = panel.ListActive, "Current SVG"
+			opts.Styling = append(opts.Styling, panel.ListItem{Name: "Change SVG", Detail: layer.style.IconName, Children: []string{"Type: SVG"}, Status: panel.ListActive})
+		}
+		opts.StylingEmptyText = "No options selected"
+		if !layer.includedOnly {
+			opts.StylingEmptyText = "No available options"
+		}
+		for _, property := range layer.visibleProperties() {
+			defaultValue := "none"
+			if len(property.spec.Default) > 0 {
+				var value bytes.Buffer
+				if json.Compact(&value, property.spec.Default) == nil {
+					defaultValue = value.String()
 				}
-				opts.Styling = append(opts.Styling, item)
 			}
-		} else {
-			opts.StylingEmptyText = "No options selected"
-			if !layer.includedOnly {
-				opts.StylingEmptyText = "No available options"
-			}
-			for _, property := range layer.visibleProperties() {
-				defaultValue := "none"
-				if len(property.spec.Default) > 0 {
-					var value bytes.Buffer
-					if json.Compact(&value, property.spec.Default) == nil {
-						defaultValue = value.String()
-					}
-				}
-				opts.Styling = append(opts.Styling, panel.ListItem{Name: property.name, Status: layer.options[property.name].status(), Children: []string{"Type: " + string(property.spec.Type), "Default: " + defaultValue}})
-			}
+			opts.Styling = append(opts.Styling, panel.ListItem{Name: property.name, Status: layer.options[property.name].status(), Children: []string{"Type: " + string(property.spec.Type), "Default: " + defaultValue}})
 		}
 		opts.SelectedStyling, opts.FirstVisibleStyling = layer.selected, layer.firstVisible
 		opts.InfoContent = m.propertyInfo(layer)
 	}
-	if m.stylingCatalog.err != nil && s.mode == styleEdit && s.activeLayer().style.Type != maplibre.RenderSymbol {
-		opts.Styling = nil
+	if m.stylingCatalog.err != nil && s.mode == styleEdit {
+		opts.Styling = opts.Styling[:s.activeLayer().optionOffset()]
 		opts.StylingEmptyText = "Style reference: " + m.stylingCatalog.err.Error()
 		opts.InfoContent = opts.StylingEmptyText
 	}
 }
 
 func (m *Model) propertyInfo(layer *styleLayerState) string {
-	if layer.style.Type == maplibre.RenderSymbol {
-		displayName := func(name string) string {
-			return strings.NewReplacer("\n", `\n`, "\r", `\r`, "\t", `\t`).Replace(ansi.Strip(name))
-		}
-		rows := []string{"Current SVG: " + displayName(layer.style.IconName)}
-		if name, ok := m.currentIcon(layer); ok {
-			rows = append(rows, "Highlighted SVG: "+displayName(name), "", "Enter to use the highlighted SVG.")
-		} else {
-			rows = append(rows, "", "No SVG icons loaded")
-		}
+	if layer.optionOffset() > 0 && layer.selected == 0 {
+		rows := []string{"Current SVG: " + displayIconName(layer.style.IconName), "", "Enter to choose another SVG. Esc returns without changing it."}
 		return strings.Join(rows, "\n")
 	}
 	property, ok := layer.currentProperty()
@@ -549,4 +577,8 @@ func (m *Model) propertyInfo(layer *styleLayerState) string {
 		rows = append(rows, "", "Value: "+string(value))
 	}
 	return strings.Join(rows, "\n")
+}
+
+func displayIconName(name string) string {
+	return strings.NewReplacer("\n", `\n`, "\r", `\r`, "\t", `\t`).Replace(ansi.Strip(name))
 }

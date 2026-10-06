@@ -34,7 +34,7 @@ type controlRow struct {
 
 func (m *Model) currentControl() (*styleLayerState, styleProperty, *controlState) {
 	s := m.currentStyling()
-	if s == nil || s.mode != styleEdit || s.activeLayer() == nil || s.activeLayer().style.Type == maplibre.RenderSymbol {
+	if s == nil || s.mode != styleEdit || s.activeLayer() == nil {
 		return nil, styleProperty{}, nil
 	}
 	layer := s.activeLayer()
@@ -493,8 +493,8 @@ func (m *Model) controlsPresentation(opts *panel.ScaffoldOptions) {
 	opts.ControlsEmptyText = "Choose a styling option"
 	_, p, c := m.currentControl()
 	if c == nil {
-		if s := m.currentStyling(); s != nil && s.mode == styleEdit && s.activeLayer().style.Type == maplibre.RenderSymbol {
-			opts.ControlsEmptyText = "Choose an SVG in Styling"
+		if s := m.currentStyling(); s != nil && s.mode == styleEdit && s.activeLayer().optionOffset() > 0 && s.activeLayer().selected == 0 {
+			opts.ControlsEmptyText = "Change SVG in Styling"
 		}
 		return
 	}
