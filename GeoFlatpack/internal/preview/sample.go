@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"strings"
 
 	"GeoFlatpack/style/maplibre"
 )
@@ -16,10 +17,22 @@ const earthRadius = 6371008.8
 func sampleGeometry(data collection, typ maplibre.GeometryType, marker string) (collection, error) {
 	var original *feature
 	for i := range data.Features {
-		if _, companion := data.Features[i].Properties[marker]; marker != "" && companion {
+		candidate := &data.Features[i]
+		var geometry struct{ Type string }
+		if json.Unmarshal(candidate.Geometry, &geometry) != nil {
 			continue
 		}
-		original = &data.Features[i]
+		// GDAL can expose the schema's marker column as null on the original.
+		// Only marked MultiPoints are vertex companions; key presence is not
+		// enough to distinguish them from the ordinary source geometry.
+		value := candidate.Properties[marker]
+		if marker != "" && geometry.Type == "MultiPoint" && (value == string(maplibre.Line) || value == string(maplibre.Polygon)) {
+			continue
+		}
+		if strings.TrimPrefix(geometry.Type, "Multi") != string(typ) {
+			continue
+		}
+		original = candidate
 		break
 	}
 	if original == nil {
@@ -67,6 +80,9 @@ func sampleGeometry(data collection, typ maplibre.GeometryType, marker string) (
 	sample := *original
 	sample.Geometry = geometry
 	sample.Properties = maps.Clone(original.Properties)
+	if marker != "" {
+		delete(sample.Properties, marker)
+	}
 	result := collection{Type: "FeatureCollection", Features: []feature{sample}}
 	if marker != "" && typ != maplibre.Point {
 		geometry, err := marshalGeometry("MultiPoint", vertices)
