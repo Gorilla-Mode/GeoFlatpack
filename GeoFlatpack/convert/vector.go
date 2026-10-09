@@ -34,13 +34,13 @@ type VectorGeometry struct {
 func VectorToFgb(geometry VectorGeometry) (files []*MemoryFGB, err error) {
 	godal.RegisterAll()
 
-	options := []godal.OpenOption{godal.VectorOnly()}
+	args := []godal.OpenOption{godal.VectorOnly()}
 
 	if geometry.Format == validate.FGB {
-		options = append(options, godal.DriverOpenOption("WRITE_GFS=NO"))
+		args = append(args, godal.DriverOpenOption("WRITE_GFS=NO"))
 	}
 
-	src, err := godal.Open(geometry.InputPath, options...)
+	src, err := godal.Open(geometry.InputPath, args...)
 
 	if err != nil {
 		return nil, fmt.Errorf("open GML: %w", err)
@@ -61,10 +61,10 @@ func VectorToFgb(geometry VectorGeometry) (files []*MemoryFGB, err error) {
 		return nil, err
 	}
 
-	return convertLayers(src, fmt.Sprintf("/vsimem/gfp-%x", id[:]), geometry.ForceEPSG4326, geometry.SkipFailures)
+	return convertLayers(src, fmt.Sprintf("/vsimem/gfp-%x", id[:]), geometry.ForceEPSG4326, geometry.SkipFailures, geometry.Format)
 }
 
-func convertLayers(src *godal.Dataset, prefix string, forceEPSG4326, skipFailures bool) (files []*MemoryFGB, err error) {
+func convertLayers(src *godal.Dataset, prefix string, forceEPSG4326, skipFailures bool, format validate.VectorFormat) (files []*MemoryFGB, err error) {
 	layers := src.Layers()
 	if len(layers) == 0 {
 		return nil, fmt.Errorf("input has no layers")
@@ -84,7 +84,7 @@ func convertLayers(src *godal.Dataset, prefix string, forceEPSG4326, skipFailure
 		if schemaErr != nil {
 			return files, fmt.Errorf("layer %q schema: %w", layer.Name(), schemaErr)
 		}
-		file, convertErr := convertLayer(src, layer.Name(), fmt.Sprintf("%s-%d.fgb", prefix, i), forceEPSG4326, skipFailures)
+		file, convertErr := convertLayer(src, layer.Name(), fmt.Sprintf("%s-%d.fgb", prefix, i), forceEPSG4326, skipFailures, format)
 		if convertErr != nil {
 			return files, fmt.Errorf("layer %q: %w", layer.Name(), convertErr)
 		}
@@ -119,7 +119,7 @@ func layerListColumns(layer godal.Layer) ([]string, error) {
 	return names, nil
 }
 
-func convertLayer(src *godal.Dataset, name, path string, forceEPSG4326, skipFailures bool) (*MemoryFGB, error) {
+func convertLayer(src *godal.Dataset, name, path string, forceEPSG4326, skipFailures bool, format validate.VectorFormat) (*MemoryFGB, error) {
 	keep := false
 	defer func() {
 		if !keep {
@@ -134,12 +134,30 @@ func convertLayer(src *godal.Dataset, name, path string, forceEPSG4326, skipFail
 		args = append(args, "-t_srs", "EPSG:4326")
 	}
 
-	if skipFailures {
+	if skipFailures || format == validate.FGDB {
 		args = append(args, "-skipfailures")
 	}
 
 	args = append(args, name)
-	dst, err := src.VectorTranslate(path, args)
+	skipped := 0
+
+	dst, err := src.VectorTranslate(path, args, godal.ErrLogger(
+		func(category godal.ErrorCategory, code int, msg string) error {
+			if format == validate.FGDB &&
+				category == godal.CE_Failure &&
+				msg == "ICreateFeature: NULL geometry not supported with spatial index" {
+				skipped++
+
+				return nil
+			}
+
+			if category >= godal.CE_Warning {
+				return fmt.Errorf("%s", msg)
+			}
+
+			return nil
+		},
+	))
 
 	if err != nil {
 		if dst != nil {
