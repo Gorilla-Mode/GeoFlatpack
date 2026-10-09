@@ -91,12 +91,14 @@ func newScaffoldLayout(width, height int) scaffoldLayout {
 		l.columns[i] = paneSize{w, height}
 		used += w
 	}
+
 	l.columns[4] = paneSize{available - used, height}
 
 	l.preview = l.columns[4]
 	interior := l.preview.interior()
 	if interior.width > 0 && interior.height >= 3 {
 		l.split = true
+
 		// Reserve the shared divider. Give Layers/Controls 60% of the rows,
 		// about 20% more height than the previous even split.
 		remaining := interior.height - 1
@@ -108,6 +110,7 @@ func newScaffoldLayout(width, height int) scaffoldLayout {
 			l.controls.height++   // bottom border
 		}
 	}
+
 	return l
 }
 
@@ -115,6 +118,7 @@ func (s paneSize) interior() paneSize {
 	if s.width >= 3 && s.height >= 3 {
 		return paneSize{s.width - 2, s.height - 2}
 	}
+
 	return s
 }
 
@@ -134,18 +138,21 @@ func Scaffold(opts ScaffoldOptions) string {
 	if opts.Width <= 0 || opts.Height <= 0 {
 		return ""
 	}
+
 	l := newScaffoldLayout(opts.Width, opts.Height)
 	selectable := func(pane Pane, size paneSize, heading string) string {
 		box, title := opts.InactivePaneStyle, opts.MutedStyle
 		if pane == opts.ActivePane {
 			box, title = opts.PaneStyle, opts.TitleStyle
 		}
+
 		interior := paneInterior(size, box)
 		paneOpts := paneOptions{size: size, heading: heading, box: box, title: title}
 		paneOpts.contentInset, paneOpts.contentGap = listInset(interior), listHeadingGap(interior)
 		if listFooterHeight(interior) > 0 {
 			paneOpts.footer = opts.ScrollHintStyle.Render(ansi.Truncate("↑/↓ Scroll", interior.width, ""))
 		}
+
 		if pane == LayerPane {
 			paneOpts.content = List(layerListOptions(opts, interior))
 		} else if pane == CategoryPane {
@@ -155,6 +162,7 @@ func Scaffold(opts ScaffoldOptions) string {
 		} else if pane == FeatureStylingPane {
 			paneOpts.content = List(stylingListOptions(opts, interior))
 		}
+
 		return renderPane(paneOpts)
 	}
 
@@ -163,7 +171,9 @@ func Scaffold(opts ScaffoldOptions) string {
 	if stylingHeading == "" {
 		stylingHeading = "Feature styling"
 	}
+
 	gap := lipgloss.NewStyle().Width(l.gap).Height(opts.Height).Render(strings.Repeat(" ", l.gap))
+
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		selectable(LayerPane, l.columns[0], "Layer selection"), gap,
 		selectable(CategoryPane, l.columns[1], "Category"), gap,
@@ -179,13 +189,16 @@ func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {
 	if !l.split {
 		return renderPane(preview)
 	}
+
 	if opts.ShowStack {
 		return renderStackControls(opts, l, preview)
 	}
+
 	controls := paneOptions{
 		size: l.controls, heading: "Controls",
 		box: opts.InactivePaneStyle, title: opts.MutedStyle,
 	}
+
 	if opts.ActivePane == ControlsPane {
 		controls.box, controls.title = opts.PaneStyle, opts.TitleStyle
 	}
@@ -197,6 +210,7 @@ func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {
 		populateControls(&controls, opts, paneInterior(l.controls, controls.box))
 		divider := lipgloss.NewStyle().Foreground(controls.box.GetBorderTopForeground()).
 			Render(strings.Repeat("─", l.columns[4].width))
+
 		return strings.Join([]string{renderPane(preview), divider, renderPane(controls)}, "\n")
 	}
 
@@ -207,6 +221,7 @@ func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {
 		BorderBottomForeground(controls.box.GetBorderTopForeground())
 	controls.box = controls.box.BorderTop(false)
 	populateControls(&controls, opts, paneInterior(l.controls, controls.box))
+
 	return renderPane(preview) + "\n" + renderPane(controls)
 }
 
@@ -216,11 +231,13 @@ func paneBox(size paneSize, style lipgloss.Style) lipgloss.Style {
 		// Drop outlines when they would leave no room for a heading.
 		box = box.Border(lipgloss.RoundedBorder(), false)
 	}
+
 	return box
 }
 
 func paneInterior(size paneSize, style lipgloss.Style) paneSize {
 	box := paneBox(size, style)
+
 	return paneSize{max(0, size.width-box.GetHorizontalFrameSize()), max(0, size.height-box.GetVerticalFrameSize())}
 }
 
@@ -228,6 +245,7 @@ func renderPane(opts paneOptions) string {
 	if opts.size.width <= 0 || opts.size.height <= 0 {
 		return ""
 	}
+
 	box := paneBox(opts.size, opts.box)
 	interior := paneInterior(opts.size, opts.box)
 
@@ -236,6 +254,7 @@ func renderPane(opts paneOptions) string {
 	if interior.width >= 3 {
 		inset = 1
 	}
+
 	rows[0] = lipgloss.PlaceHorizontal(interior.width, lipgloss.Left,
 		strings.Repeat(" ", inset)+opts.title.Render(ansi.Truncate(opts.heading, interior.width-2*inset, "")))
 	contentEnd := len(rows)
@@ -243,13 +262,16 @@ func renderPane(opts paneOptions) string {
 		contentEnd--
 		rows[contentEnd] = opts.footer
 	}
+
 	for i, line := range strings.Split(opts.content, "\n") {
 		y := i + 1 + opts.contentGap
 		if y >= contentEnd {
 			break
 		}
+
 		rows[y] = strings.Repeat(" ", opts.contentInset) + ansi.Truncate(line, interior.width-2*opts.contentInset, "")
 	}
+
 	return box.Width(opts.size.width).Height(opts.size.height).
 		MaxWidth(opts.size.width).MaxHeight(opts.size.height).
 		Render(strings.Join(rows, "\n"))

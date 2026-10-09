@@ -141,6 +141,9 @@ Temporary Items
 *.so
 *.dylib
 
+# Local Go tests
+*_test.go
+
 # Test binary, built with `go test -c`
 *.test
 

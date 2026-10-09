@@ -22,6 +22,7 @@ func StylingWindow(opts ScaffoldOptions) int {
 	if opts.ActivePane == FeatureStylingPane {
 		box = opts.PaneStyle
 	}
+
 	return ListWindow(stylingListOptions(opts, paneInterior(l.columns[3], box)))
 }
 
@@ -36,11 +37,13 @@ func newLowerLayout(opts ScaffoldOptions, l scaffoldLayout) lowerLayout {
 	if opts.ActivePane == ControlsPane {
 		box = opts.PaneStyle
 	}
+
 	if l.columns[4].interior() == l.columns[4] {
 		box = box.Border(lipgloss.RoundedBorder(), false)
 	} else {
 		box = box.BorderTop(false)
 	}
+
 	lower := lowerLayout{box: box, interior: paneInterior(l.controls, box)}
 	lower.controls = lower.interior
 	legacySize := paneSize{l.legacyRightWidth, l.controls.height}
@@ -51,6 +54,7 @@ func newLowerLayout(opts ScaffoldOptions, l scaffoldLayout) lowerLayout {
 		lower.divided = true
 		lower.stack, lower.controls = stack, controls
 	}
+
 	return lower
 }
 
@@ -60,12 +64,15 @@ func InfoDimensions(opts ScaffoldOptions) (width, height int) {
 	if !l.split {
 		return 0, 0
 	}
+
 	lower := newLowerLayout(opts, l)
 	if !lower.divided {
 		return 0, 0
 	}
+
 	interior := paneInterior(l.preview, opts.PaneStyle)
 	interior.width = lower.stack.width
+
 	return max(0, interior.width-2*listInset(interior)), max(0, interior.height-1-listHeadingGap(interior))
 }
 
@@ -84,6 +91,7 @@ func StackWindow(opts ScaffoldOptions) int {
 	if !l.split || !lower.divided {
 		return opts.StackFirstVisible
 	}
+
 	return ListWindow(stackListOptions(opts, lower.stack))
 }
 
@@ -94,9 +102,11 @@ func renderStackControls(opts ScaffoldOptions, l scaffoldLayout, preview paneOpt
 	if opts.ActivePane == ControlsPane {
 		title = opts.TitleStyle
 	}
+
 	controls := paneOptions{
 		size: lower.controls, heading: "Controls", box: plain, title: title,
 	}
+
 	populateControls(&controls, opts, lower.controls)
 	content := renderPane(controls)
 	borderStyle := lipgloss.NewStyle().Foreground(lower.box.GetBorderTopForeground())
@@ -105,9 +115,11 @@ func renderStackControls(opts ScaffoldOptions, l scaffoldLayout, preview paneOpt
 			size: lower.stack, heading: "Layers", box: plain, title: opts.MutedStyle,
 			content: List(stackListOptions(opts, lower.stack)), contentInset: listInset(lower.stack), contentGap: listHeadingGap(lower.stack),
 		})
+
 		separator := borderStyle.Render(strings.TrimSuffix(strings.Repeat("│\n", lower.interior.height), "\n"))
 		content = lipgloss.JoinHorizontal(lipgloss.Top, stack, separator, content)
 	}
+
 	controlsView := paneBox(l.controls, lower.box).Width(l.controls.width).Height(l.controls.height).
 		MaxWidth(l.controls.width).MaxHeight(l.controls.height).Render(content)
 	outlined := l.columns[4].interior() != l.columns[4]
@@ -117,8 +129,10 @@ func renderStackControls(opts ScaffoldOptions, l scaffoldLayout, preview paneOpt
 		if lower.divided {
 			divider = replaceCell(divider, lower.stack.width, "┼")
 		}
+
 		return renderUpper(opts, l, lower, preview) + "\n" + borderStyle.Render(divider) + "\n" + controlsView
 	}
+
 	border := lipgloss.RoundedBorder()
 	border.BottomLeft, border.BottomRight = "├", "┤"
 	preview.box = preview.box.Border(border).BorderBottomForeground(lower.box.GetBorderTopForeground())
@@ -133,6 +147,7 @@ func renderStackControls(opts ScaffoldOptions, l scaffoldLayout, preview paneOpt
 			controlsView = strings.Join(rows, "\n")
 		}
 	}
+
 	return strings.Join(previewRows, "\n") + "\n" + controlsView
 }
 
@@ -140,6 +155,7 @@ func renderUpper(opts ScaffoldOptions, l scaffoldLayout, lower lowerLayout, prev
 	if !lower.divided {
 		return renderPane(preview)
 	}
+
 	interior := paneInterior(preview.size, preview.box)
 	infoSize := paneSize{lower.stack.width, interior.height}
 	width, height := InfoDimensions(opts)
@@ -147,12 +163,14 @@ func renderUpper(opts ScaffoldOptions, l scaffoldLayout, lower lowerLayout, prev
 		size: infoSize, heading: "Info", box: lipgloss.NewStyle(), title: opts.MutedStyle,
 		content: clippedInfo(opts.InfoContent, width, height, opts.ListStyles.Detail), contentInset: listInset(infoSize), contentGap: listHeadingGap(infoSize),
 	})
+
 	previewPane := paneOptions{size: paneSize{lower.controls.width, interior.height}, heading: "Preview", box: lipgloss.NewStyle(), title: opts.TitleStyle}
 	populatePreview(&previewPane, opts, previewPane.size)
 	previewView := renderPane(previewPane)
 	separator := lipgloss.NewStyle().Foreground(opts.InactivePaneStyle.GetBorderTopForeground()).
 		Render(strings.TrimSuffix(strings.Repeat("│\n", interior.height), "\n"))
 	content := lipgloss.JoinHorizontal(lipgloss.Top, info, separator, previewView)
+
 	return paneBox(preview.size, preview.box).Width(preview.size.width).Height(preview.size.height).
 		MaxWidth(preview.size.width).MaxHeight(preview.size.height).Render(content)
 }
@@ -161,14 +179,17 @@ func clippedInfo(content string, width, height int, style lipgloss.Style) string
 	if width <= 0 || height <= 0 || content == "" {
 		return ""
 	}
+
 	rows := strings.Split(ansi.Wrap(content, width, ""), "\n")
 	if len(rows) > height {
 		rows = rows[:height]
 		rows[height-1] = ansi.Truncate("...", width, "")
 	}
+
 	for i, row := range rows {
 		rows[i] = style.Inline(true).Render(ansi.Truncate(row, width, ""))
 	}
+
 	return strings.Join(rows, "\n")
 }
 

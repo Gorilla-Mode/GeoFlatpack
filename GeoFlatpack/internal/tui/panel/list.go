@@ -59,6 +59,7 @@ func listHeight(item ListItem) int {
 	if item.Detail == "" && len(item.Children) > 0 {
 		return 1 + len(item.Children)
 	}
+
 	return listItemHeight + len(item.Children)
 }
 
@@ -68,6 +69,7 @@ func listEnd(items []ListItem, first, height int) (end, used int) {
 		used += listItemGap + listHeight(items[end])
 		end++
 	}
+
 	return end, used
 }
 
@@ -75,6 +77,7 @@ func listOverflowHeight(opts ListOptions) int {
 	if opts.Height < 2 {
 		return 0 // Keep at least the selected item's name visible.
 	}
+
 	used := -listItemGap
 	for _, item := range opts.Items {
 		used += listItemGap + listHeight(item)
@@ -82,6 +85,7 @@ func listOverflowHeight(opts ListOptions) int {
 			return 1
 		}
 	}
+
 	return 0
 }
 
@@ -95,20 +99,24 @@ func ListWindow(opts ListOptions) int {
 	if len(opts.Items) == 0 {
 		return 0
 	}
+
 	selected := MoveListSelection(opts.Selected, 0, len(opts.Items))
 	height := opts.Height - listOverflowHeight(opts)
 	if listHeight(opts.Items[selected]) > height {
 		return selected
 	}
+
 	first := min(max(0, opts.FirstVisible), selected)
 	used := listHeight(opts.Items[selected])
 	for i := first; i < selected; i++ {
 		used += listHeight(opts.Items[i]) + listItemGap
 	}
+
 	for used > height && first < selected {
 		used -= listHeight(opts.Items[first]) + listItemGap
 		first++
 	}
+
 	// Backfill when the list ends before the available space is exhausted.
 	end, used := listEnd(opts.Items, first, height)
 	if end == len(opts.Items) {
@@ -117,6 +125,7 @@ func ListWindow(opts ListOptions) int {
 			used += listItemGap + listHeight(opts.Items[first])
 		}
 	}
+
 	return first
 }
 
@@ -127,9 +136,11 @@ func List(opts ListOptions) string {
 	if opts.Width <= 0 || opts.Height <= 0 {
 		return ""
 	}
+
 	if len(opts.Items) == 0 {
 		return opts.Styles.Name.Render(ansi.Truncate(opts.EmptyText, opts.Width, "…"))
 	}
+
 	first := ListWindow(opts)
 	overflow := listOverflowHeight(opts)
 	height := opts.Height - overflow
@@ -139,18 +150,23 @@ func List(opts ListOptions) string {
 		if i > first {
 			rows = append(rows, strings.Repeat(" ", opts.Width))
 		}
+
 		if len(rows) >= height {
 			break
 		}
+
 		itemRows := strings.Split(renderListItem(opts, opts.Items[i], !opts.HideSelection && i == selected), "\n")
 		rows = append(rows, itemRows[:min(height-len(rows), len(itemRows))]...)
 	}
+
 	if overflow > 0 {
 		for len(rows) < height {
 			rows = append(rows, strings.Repeat(" ", opts.Width))
 		}
+
 		rows = append(rows, opts.Styles.Detail.Inline(true).Render(ansi.Truncate("...", opts.Width, "")))
 	}
+
 	return strings.Join(rows, "\n")
 }
 
@@ -159,6 +175,7 @@ func renderListItem(opts ListOptions, item ListItem, selected bool) string {
 	if selected {
 		fill, name = opts.Styles.SelectedItem, opts.Styles.SelectedName
 	}
+
 	background := fill.GetBackground()
 	name = name.Bold(selected).Background(background).Inline(true)
 	indicator, indicatorStyle := "○", opts.Styles.Unopened
@@ -170,6 +187,7 @@ func renderListItem(opts ListOptions, item ListItem, selected bool) string {
 	case ListComplete, ListActive:
 		indicator, indicatorStyle = "●", opts.Styles.Complete
 	}
+
 	// Embedded ANSI resets must not override the item's colors or fill.
 	label := ansi.Truncate(listText(item.Name), max(0, opts.Width-2), "…")
 	first := indicatorStyle.Background(background).Render(indicator) + fill.Render(" ") + name.Render(label)
@@ -178,13 +196,16 @@ func renderListItem(opts ListOptions, item ListItem, selected bool) string {
 	if item.Detail != "" || len(item.Children) == 0 {
 		rows = append(rows, detail.Render(ansi.Truncate("  "+listText(item.Detail), opts.Width, "")))
 	}
+
 	for i, child := range item.Children {
 		branch := "  ├── "
 		if i == len(item.Children)-1 {
 			branch = "  └── "
 		}
+
 		rows = append(rows, detail.Render(ansi.Truncate(branch+listText(child), opts.Width, "…")))
 	}
+
 	return fill.Width(opts.Width).Height(listHeight(item)).Render(strings.Join(rows, "\n"))
 }
 

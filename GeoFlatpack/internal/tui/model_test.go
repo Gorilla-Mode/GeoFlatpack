@@ -4,6 +4,8 @@ import (
 	"GeoFlatpack/fgb"
 	"GeoFlatpack/internal/app"
 	"GeoFlatpack/internal/tui/panel"
+	"GeoFlatpack/internal/tui/workflow"
+	"GeoFlatpack/style/maplibre/svg"
 	"context"
 	"errors"
 	"fmt"
@@ -21,10 +23,21 @@ import (
 )
 
 type testSession struct {
-	closed   int
-	closeErr error
-	layers   []app.Layer
+	closed    int
+	closeErr  error
+	layers    []app.Layer
+	icons     map[string]svg.Svg
+	writeFunc func([]app.StyleSelection) error
 }
+
+func (s *testSession) Write(selections []app.StyleSelection) error {
+	if s.writeFunc != nil {
+		return s.writeFunc(selections)
+	}
+	return nil
+}
+
+func (s *testSession) Icons() map[string]svg.Svg { return s.icons }
 
 func (s *testSession) Layers() []app.Layer {
 	if s.layers != nil {
@@ -49,7 +62,7 @@ func updateModel(t *testing.T, m *Model, msg tea.Msg) tea.Cmd {
 func completedModel(t *testing.T) *Model {
 	t.Helper()
 	m := NewModel(app.Options{Input: "test.gml"})
-	updateModel(t, m, preparedMsg{session: &testSession{}, elapsed: time.Second})
+	updateModel(t, m, workflow.PreparedMsg{Session: &testSession{}, Elapsed: time.Second})
 	return m
 }
 
@@ -64,23 +77,23 @@ func TestScaffoldFocusNavigation(t *testing.T) {
 	for _, mod := range []tea.KeyMod{tea.ModCtrl, tea.ModAlt} {
 		t.Run(fmt.Sprint(mod), func(t *testing.T) {
 			m := completedModel(t)
-			m.activePane = panel.ControlsPane
+			m.editor.Focus(panel.ControlsPane)
 			updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
-			if m.screen != scaffoldScreen || m.activePane != panel.LayerPane {
+			if m.screen != scaffoldScreen || m.editor.Pane() != panel.LayerPane {
 				t.Fatal("Enter should open scaffold focused on Layer selection")
 			}
 			for _, tt := range []struct {
 				key  rune
 				want panel.Pane
 			}{
-				{tea.KeyRight, panel.CategoryPane}, {tea.KeyRight, panel.FeaturePane},
+				{tea.KeyRight, panel.CategoryPane}, {tea.KeyRight, panel.FeaturesPane}, {tea.KeyRight, panel.FeatureStylingPane},
 				{tea.KeyRight, panel.ControlsPane}, {tea.KeyRight, panel.LayerPane},
-				{tea.KeyLeft, panel.ControlsPane}, {tea.KeyLeft, panel.FeaturePane},
+				{tea.KeyLeft, panel.ControlsPane}, {tea.KeyLeft, panel.FeatureStylingPane}, {tea.KeyLeft, panel.FeaturesPane},
 				{tea.KeyLeft, panel.CategoryPane}, {tea.KeyLeft, panel.LayerPane},
 			} {
 				cmd := updateModel(t, m, tea.KeyPressMsg{Code: tt.key, Mod: mod})
-				if cmd != nil || m.activePane != tt.want {
-					t.Fatalf("focus = %v, want %v; command = %v", m.activePane, tt.want, cmd != nil)
+				if cmd != nil || m.editor.Pane() != tt.want {
+					t.Fatalf("focus = %v, want %v; command = %v", m.editor.Pane(), tt.want, cmd != nil)
 				}
 			}
 		})
@@ -118,37 +131,38 @@ func TestPaneNavigationInputStreams(t *testing.T) {
 		{"Control arrows", "\x1b[1;5D", "\x1b[1;5C"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			keys := decodeTerminalKeys(t, strings.Repeat(tt.right, 4)+strings.Repeat(tt.left, 4))
-			if len(keys) != 8 {
-				t.Fatalf("decoded %d events, want 8", len(keys))
+			keys := decodeTerminalKeys(t, strings.Repeat(tt.right, 5)+strings.Repeat(tt.left, 5))
+			if len(keys) != 10 {
+				t.Fatalf("decoded %d events, want 10", len(keys))
 			}
 			m := scaffoldModel(t)
 			for i, want := range []panel.Pane{
-				panel.CategoryPane, panel.FeaturePane, panel.ControlsPane, panel.LayerPane,
-				panel.ControlsPane, panel.FeaturePane, panel.CategoryPane, panel.LayerPane,
+				panel.CategoryPane, panel.FeaturesPane, panel.FeatureStylingPane, panel.ControlsPane, panel.LayerPane,
+				panel.ControlsPane, panel.FeatureStylingPane, panel.FeaturesPane, panel.CategoryPane, panel.LayerPane,
 			} {
 				before := m.View().Content
 				updateModel(t, m, keys[i])
-				if m.activePane != want || m.View().Content == before {
-					t.Fatalf("input %q: focus = %d, want %d, or highlight failed to change", keys[i], m.activePane, want)
+				if m.editor.Pane() != want || m.View().Content == before {
+					t.Fatalf("input %q: focus = %d, want %d, or highlight failed to change", keys[i], m.editor.Pane(), want)
 				}
 			}
 			updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
 			for _, key := range keys {
 				updateModel(t, m, key)
-				if m.activePane != panel.LayerPane {
+				if m.editor.Pane() != panel.LayerPane {
 					t.Fatal("input stream changed focus while help was open")
 				}
 			}
 			updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
-			if m.activePane != panel.LayerPane || m.help.ShowAll {
+			if m.editor.Pane() != panel.LayerPane || m.help.ShowAll {
 				t.Fatal("closing help did not preserve focus")
 			}
 			for _, screen := range []screen{loadingScreen, completionScreen, failureScreen} {
-				m.screen, m.activePane = screen, panel.ControlsPane
+				m.screen = screen
+				m.editor.Focus(panel.ControlsPane)
 				for _, key := range keys {
 					updateModel(t, m, key)
-					if m.activePane != panel.ControlsPane || m.screen != screen {
+					if m.editor.Pane() != panel.ControlsPane || m.screen != screen {
 						t.Fatal("pane input changed a processing screen")
 					}
 				}
@@ -161,7 +175,7 @@ func TestCommandBindingsNoLongerNavigate(t *testing.T) {
 	m := scaffoldModel(t)
 	for _, key := range decodeTerminalKeys(t, "\x01\x05\x1b[1;9D\x1b[1;9C\x1b[57350;9u\x1b[57351;9u") {
 		updateModel(t, m, key)
-		if m.activePane != panel.LayerPane {
+		if m.editor.Pane() != panel.LayerPane {
 			t.Fatalf("Command input %q still moved focus", key)
 		}
 	}
@@ -175,12 +189,12 @@ func TestScaffoldFocusAcrossHelpAndResize(t *testing.T) {
 	for pane := panel.LayerPane; pane < panel.PaneCount; pane++ {
 		t.Run(fmt.Sprint(pane), func(t *testing.T) {
 			m := scaffoldModel(t)
-			m.activePane = pane
+			m.editor.Focus(pane)
 			before := m.View().Content
 			for _, size := range []tea.WindowSizeMsg{{Width: 120, Height: 40}, {Width: 1, Height: 1}, {Width: 80, Height: 24}} {
 				updateModel(t, m, size)
 				m.View()
-				if m.activePane != pane {
+				if m.editor.Pane() != pane {
 					t.Fatal("scaffold resize changed focus")
 				}
 			}
@@ -191,7 +205,7 @@ func TestScaffoldFocusAcrossHelpAndResize(t *testing.T) {
 			for _, mod := range []tea.KeyMod{tea.ModCtrl, tea.ModAlt} {
 				for _, key := range []rune{tea.KeyLeft, tea.KeyRight} {
 					updateModel(t, m, tea.KeyPressMsg{Code: key, Mod: mod})
-					if m.activePane != pane {
+					if m.editor.Pane() != pane {
 						t.Fatal("pane navigation changed focus while help was open")
 					}
 				}
@@ -204,12 +218,12 @@ func TestScaffoldFocusAcrossHelpAndResize(t *testing.T) {
 			for _, size := range []tea.WindowSizeMsg{{Width: 120, Height: 40}, {Width: 1, Height: 1}, {Width: 80, Height: 24}} {
 				updateModel(t, m, size)
 				m.View()
-				if m.activePane != pane {
+				if m.editor.Pane() != pane {
 					t.Fatal("resize changed focus")
 				}
 			}
 			updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
-			if m.help.ShowAll || m.activePane != pane || m.View().Content != before {
+			if m.help.ShowAll || m.editor.Pane() != pane || m.View().Content != before {
 				t.Fatal("closing help did not restore the selected pane and scaffold")
 			}
 		})
@@ -219,16 +233,16 @@ func TestScaffoldFocusAcrossHelpAndResize(t *testing.T) {
 func TestScaffoldIgnoresUnsupportedContentKeys(t *testing.T) {
 	m := scaffoldModel(t)
 	before := m.View().Content
-	for _, code := range []rune{tea.KeyRight, tea.KeyLeft, tea.KeyEnter, tea.KeyPgDown, tea.KeyPgUp, tea.KeyHome, tea.KeyEnd} {
+	for _, code := range []rune{tea.KeyRight, tea.KeyLeft, tea.KeyPgDown, tea.KeyPgUp, tea.KeyHome, tea.KeyEnd} {
 		if cmd := updateModel(t, m, tea.KeyPressMsg{Code: code}); cmd != nil {
 			t.Fatalf("inactive key %d produced a command", code)
 		}
-		if m.View().Content != before || m.activePane != panel.LayerPane || m.screen != scaffoldScreen {
+		if m.View().Content != before || m.editor.Pane() != panel.LayerPane || m.screen != scaffoldScreen {
 			t.Fatalf("inactive key %d changed scaffold", code)
 		}
 	}
-	if m.viewport.GetContent() != "" || m.viewport.YOffset() != 0 || strings.Contains(ansi.Strip(before), "Scroll") {
-		t.Fatal("scaffold entered the shared viewport or showed scroll hints")
+	if m.viewport.GetContent() != "" || m.viewport.YOffset() != 0 || strings.Count(ansi.Strip(before), "↑/↓") != 5 || strings.Contains(ansi.Strip(before), "PgUp/PgDn Scroll") {
+		t.Fatal("scaffold entered the shared viewport or lost its pane scroll hints")
 	}
 }
 
@@ -240,13 +254,13 @@ func TestScaffoldFocusStyles(t *testing.T) {
 		x, y, width int
 		heading     string
 	}{
-		{2, 3, 20, "Layer selection"}, {23, 3, 20, "Category option"},
-		{44, 3, 30, "Feature option"}, {75, 19, 43, "Controls/color picker"},
-		{75, 3, 43, "Preview"},
+		{2, 3, 13, "Layer selection"}, {16, 3, 13, "Category"},
+		{30, 3, 13, "Features"}, {44, 3, 13, "Feature styling"},
+		{58, 16, 60, "Controls"}, {58, 3, 60, "Preview"},
 	}
 	for active := panel.LayerPane; active < panel.PaneCount; active++ {
-		if m.activePane != active {
-			t.Fatalf("focus = %d, want %d", m.activePane, active)
+		if m.editor.Pane() != active {
+			t.Fatalf("focus = %d, want %d", m.editor.Pane(), active)
 		}
 		buffer := uv.NewScreenBuffer(120, 40)
 		uv.NewStyledString(m.View().Content).Draw(buffer, buffer.Bounds())
@@ -257,10 +271,10 @@ func TestScaffoldFocusStyles(t *testing.T) {
 				paneColor = lipgloss.Color("252")
 			}
 			points := [][2]int{{pane.x, pane.y}, {pane.x + pane.width/2, pane.y}, {pane.x + pane.width - 1, pane.y + 1}}
-			if pane.heading == "Controls/color picker" {
+			if pane.heading == "Controls" {
 				points = append(points, [2]int{pane.x, 35}, [2]int{pane.x + pane.width/2, 35}, [2]int{pane.x + pane.width - 1, 35})
 			} else if pane.heading == "Preview" {
-				points = append(points, [2]int{pane.x, 18}, [2]int{pane.x + pane.width - 1, 18})
+				points = append(points, [2]int{pane.x, 15}, [2]int{pane.x + pane.width - 1, 15})
 			}
 			for _, point := range points {
 				if !sameColor(buffer.CellAt(point[0], point[1]).Style.Fg, paneColor) {
@@ -268,6 +282,9 @@ func TestScaffoldFocusStyles(t *testing.T) {
 				}
 			}
 			headingX := pane.x + 2
+			if pane.heading == "Controls" || pane.heading == "Preview" {
+				headingX += 14
+			}
 			cell := buffer.CellAt(headingX, pane.y+1)
 			if !sameColor(cell.Style.Fg, paneColor) {
 				t.Errorf("active %d: %s heading has wrong color", active, pane.heading)
@@ -283,7 +300,7 @@ func TestScaffoldFocusStyles(t *testing.T) {
 		updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
 		updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt})
 		updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
-		if m.help.ShowAll || m.activePane != active || m.View().Content != before {
+		if m.help.ShowAll || m.editor.Pane() != active || m.View().Content != before {
 			t.Errorf("active %d: help toggle changed focus styles", active)
 		}
 		updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt})
@@ -335,7 +352,7 @@ func TestProcessingScreensAndQuit(t *testing.T) {
 	}
 	for _, msg := range []tea.Msg{tea.KeyPressMsg{Code: tea.KeyEnter}, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModCtrl}} {
 		updateModel(t, m, msg)
-		if m.screen != loadingScreen || m.activePane != panel.LayerPane {
+		if m.screen != loadingScreen || m.editor.Pane() != panel.LayerPane {
 			t.Fatal("scaffold keys changed loading state")
 		}
 	}
@@ -344,9 +361,9 @@ func TestProcessingScreensAndQuit(t *testing.T) {
 		t.Fatal("loading elapsed time no longer updates")
 	}
 	session := &testSession{}
-	updateModel(t, m, preparedMsg{session: session, elapsed: 2 * time.Second})
+	updateModel(t, m, workflow.PreparedMsg{Session: session, Elapsed: 2 * time.Second})
 	complete := ansi.Strip(m.View().Content)
-	if m.screen != completionScreen || m.session != session || !strings.Contains(complete, "Processing complete") || !strings.Contains(complete, "Roads") || !strings.Contains(complete, "Continue") {
+	if m.screen != completionScreen || m.workflow.Session() != session || !strings.Contains(complete, "Processing complete") || !strings.Contains(complete, "Roads") || !strings.Contains(complete, "Continue") {
 		t.Fatal("completion screen changed")
 	}
 	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -360,7 +377,7 @@ func TestProcessingScreensAndQuit(t *testing.T) {
 
 	m = NewModel(app.Options{Input: "test.gml"})
 	failure := errors.New("input failed")
-	updateModel(t, m, preparedMsg{err: failure})
+	updateModel(t, m, workflow.PreparedMsg{Err: failure})
 	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.screen != failureScreen || m.err != failure || !strings.Contains(ansi.Strip(m.View().Content), "input failed") {
 		t.Fatal("failure screen changed or Enter opened scaffold")
@@ -376,7 +393,7 @@ func TestProcessingScreensAndQuit(t *testing.T) {
 	if !strings.Contains(ansi.Strip(m.View().Content), "Finishing processing before exiting") {
 		t.Fatal("deferred quit status changed")
 	}
-	cmd = updateModel(t, m, preparedMsg{session: session})
+	cmd = updateModel(t, m, workflow.PreparedMsg{Session: session})
 	if cmd == nil {
 		t.Fatal("deferred quit did not finish after preparation")
 	}
@@ -391,7 +408,7 @@ func TestRunModelSessionCleanup(t *testing.T) {
 			closeErr := errors.New("close failed")
 			session := &testSession{closeErr: closeErr}
 			started, release := make(chan struct{}), make(chan struct{})
-			m := newModel(app.Options{}, func(app.Options, io.Writer) (loadedSession, error) {
+			m := newModel(app.Options{}, func(app.Options, io.Writer) (workflow.Session, error) {
 				close(started)
 				<-release
 				return session, prepareErr
@@ -430,7 +447,7 @@ func TestRunModelSessionCleanup(t *testing.T) {
 func modelWithLayers(t *testing.T, layers []app.Layer) *Model {
 	t.Helper()
 	m := NewModel(app.Options{})
-	updateModel(t, m, preparedMsg{session: &testSession{layers: layers}})
+	updateModel(t, m, workflow.PreparedMsg{Session: &testSession{layers: layers}})
 	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	return m
 }
@@ -444,12 +461,12 @@ func TestSessionLayerPresentation(t *testing.T) {
 	}
 	m := modelWithLayers(t, layers)
 	updateModel(t, m, tea.WindowSizeMsg{Width: 180, Height: 40})
-	if m.selectedLayer != 0 || len(m.layers) != len(layers) {
+	if m.scaffoldOptions(m.layout()).SelectedLayer != 0 || len(m.scaffoldOptions(m.layout()).Layers) != len(layers) {
 		t.Fatal("scaffold must initially select the first loaded layer")
 	}
-	for i, count := range []int{0, 0, 1, 12} {
-		item := m.layers[i]
-		if item.Name != layers[i].Name || item.FeatureCount != count || item.Complete {
+	for i, detail := range []string{"0 features", "0 features", "1 feature", "12 features"} {
+		item := m.scaffoldOptions(m.layout()).Layers[i]
+		if item.Name != layers[i].Name || item.Detail != detail || item.Status != panel.ListUnopened {
 			t.Errorf("layer %d: unexpected presentation %+v", i, item)
 		}
 	}
@@ -467,7 +484,7 @@ func TestSessionLayerPresentation(t *testing.T) {
 	}
 	buffer := uv.NewScreenBuffer(m.width, m.height)
 	uv.NewStyledString(m.View().Content).Draw(buffer, buffer.Bounds())
-	if !sameColor(buffer.CellAt(3, 5).Style.Bg, lipgloss.Color("236")) {
+	if !sameColor(buffer.CellAt(4, 6).Style.Bg, lipgloss.Color("236")) {
 		t.Fatal("model did not pass the dark item background to the scaffold")
 	}
 }
@@ -478,32 +495,27 @@ func TestLayerSelectionAndScrolling(t *testing.T) {
 		layers[i].Name = fmt.Sprintf("Layer %02d", i)
 	}
 	m := modelWithLayers(t, layers)
-	updateModel(t, m, tea.WindowSizeMsg{Width: 120, Height: 24}) // Seven complete items.
+	updateModel(t, m, tea.WindowSizeMsg{Width: 180, Height: 24}) // Four complete items above the scroll hint.
 	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyUp})
-	if m.selectedLayer != 0 || m.firstVisibleLayer != 0 {
+	if m.scaffoldOptions(m.layout()).SelectedLayer != 0 || m.scaffoldOptions(m.layout()).FirstVisibleLayer != 0 {
 		t.Fatal("Up must clamp at the first layer")
 	}
 	for i := 1; i <= 12; i++ {
 		cmd := updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyDown})
 		want := min(i, len(layers)-1)
-		if cmd != nil || m.selectedLayer != want || m.firstVisibleLayer != max(0, want-6) {
-			t.Fatalf("Down %d: selected %d, first %d", i, m.selectedLayer, m.firstVisibleLayer)
+		if cmd != nil || m.scaffoldOptions(m.layout()).SelectedLayer != want || m.scaffoldOptions(m.layout()).FirstVisibleLayer != max(0, want-3) {
+			t.Fatalf("Down %d: selected %d, first %d", i, m.scaffoldOptions(m.layout()).SelectedLayer, m.scaffoldOptions(m.layout()).FirstVisibleLayer)
 		}
 		view := ansi.Strip(m.View().Content)
-		if !strings.Contains(view, layers[want].Name) || strings.Count(view, "○") != 7 || strings.Contains(view, "●") {
+		if !strings.Contains(view, layers[want].Name) || strings.Count(view, "○") != 4 || strings.Contains(view, "●") {
 			t.Fatalf("Down %d: selected layer not visible or incorrect indicators", i)
 		}
-	}
-	before := m.View().Content
-	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.View().Content != before || m.layers[9].Complete {
-		t.Fatal("Enter must remain inactive on layer items")
 	}
 	for i := 8; i >= -2; i-- {
 		updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyUp})
 		want := max(0, i)
-		if m.selectedLayer != want || !strings.Contains(ansi.Strip(m.View().Content), layers[want].Name) {
-			t.Fatalf("Up: selected %d, want visible %d", m.selectedLayer, want)
+		if m.scaffoldOptions(m.layout()).SelectedLayer != want || !strings.Contains(ansi.Strip(m.View().Content), layers[want].Name) {
+			t.Fatalf("Up: selected %d, want visible %d", m.scaffoldOptions(m.layout()).SelectedLayer, want)
 		}
 	}
 }
@@ -514,15 +526,15 @@ func TestLayerSelectionPreserved(t *testing.T) {
 		layers[i].Name = fmt.Sprintf("Layer %02d", i)
 	}
 	m := modelWithLayers(t, layers)
-	updateModel(t, m, tea.WindowSizeMsg{Width: 120, Height: 24})
+	updateModel(t, m, tea.WindowSizeMsg{Width: 180, Height: 24})
 	for i := 0; i < 7; i++ {
 		updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyDown})
 	}
-	for _, pane := range []panel.Pane{panel.CategoryPane, panel.FeaturePane, panel.ControlsPane} {
+	for _, pane := range []panel.Pane{panel.CategoryPane, panel.FeaturesPane, panel.FeatureStylingPane, panel.ControlsPane} {
 		updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt})
 		for _, code := range []rune{tea.KeyDown, tea.KeyUp, tea.KeyEnter} {
 			updateModel(t, m, tea.KeyPressMsg{Code: code})
-			if m.activePane != pane || m.selectedLayer != 7 || m.firstVisibleLayer != 1 {
+			if m.editor.Pane() != pane || m.scaffoldOptions(m.layout()).SelectedLayer != 7 || m.scaffoldOptions(m.layout()).FirstVisibleLayer != 4 {
 				t.Fatal("another pane changed the layer selection/window")
 			}
 		}
@@ -534,12 +546,12 @@ func TestLayerSelectionPreserved(t *testing.T) {
 		updateModel(t, m, tea.KeyPressMsg{Code: code})
 	}
 	updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
-	if m.selectedLayer != 7 || m.firstVisibleLayer != 1 || m.View().Content != before {
+	if m.scaffoldOptions(m.layout()).SelectedLayer != 7 || m.scaffoldOptions(m.layout()).FirstVisibleLayer != 4 || m.View().Content != before {
 		t.Fatal("help toggles changed selection or list window")
 	}
-	for _, size := range []tea.WindowSizeMsg{{Width: 120, Height: 12}, {Width: 1, Height: 1}, {Width: 180, Height: 40}, {Width: 120, Height: 24}} {
+	for _, size := range []tea.WindowSizeMsg{{Width: 120, Height: 12}, {Width: 1, Height: 1}, {Width: 180, Height: 40}, {Width: 180, Height: 24}} {
 		updateModel(t, m, size)
-		if m.selectedLayer != 7 || m.firstVisibleLayer != panel.LayerWindow(m.scaffoldOptions(m.layout())) {
+		if m.scaffoldOptions(m.layout()).SelectedLayer != 7 || m.scaffoldOptions(m.layout()).FirstVisibleLayer != panel.LayerWindow(m.scaffoldOptions(m.layout())) {
 			t.Fatal("resize lost selection or failed to recalculate window")
 		}
 		if size.Height >= 24 && !strings.Contains(ansi.Strip(m.View().Content), layers[7].Name) {
@@ -549,22 +561,125 @@ func TestLayerSelectionPreserved(t *testing.T) {
 	updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
 	updateModel(t, m, tea.WindowSizeMsg{Width: 120, Height: 12})
 	updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
-	if m.selectedLayer != 7 || m.firstVisibleLayer != 7 {
+	if m.scaffoldOptions(m.layout()).SelectedLayer != 7 || m.scaffoldOptions(m.layout()).FirstVisibleLayer != 7 {
 		t.Fatal("returning from help must recalculate the shortened list window")
 	}
 }
 
 func TestEmptyLayerSelection(t *testing.T) {
-	for _, session := range []loadedSession{nil, &testSession{layers: []app.Layer{}}} {
+	for _, session := range []workflow.Session{nil, &testSession{layers: []app.Layer{}}} {
 		m := NewModel(app.Options{})
-		updateModel(t, m, preparedMsg{session: session})
+		updateModel(t, m, workflow.PreparedMsg{Session: session})
 		updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
-		updateModel(t, m, tea.WindowSizeMsg{Width: 120, Height: 24})
+		updateModel(t, m, tea.WindowSizeMsg{Width: 180, Height: 24})
 		for _, code := range []rune{tea.KeyUp, tea.KeyDown, tea.KeyEnter} {
 			updateModel(t, m, tea.KeyPressMsg{Code: code})
 		}
-		if m.selectedLayer != 0 || m.firstVisibleLayer != 0 || len(m.layers) != 0 || !strings.Contains(ansi.Strip(m.View().Content), "No layers loaded") {
+		if m.editor.Pane() != panel.LayerPane || m.scaffoldOptions(m.layout()).SelectedLayer != 0 || m.scaffoldOptions(m.layout()).FirstVisibleLayer != 0 || len(m.scaffoldOptions(m.layout()).Layers) != 0 || !strings.Contains(ansi.Strip(m.View().Content), "No layers loaded") {
 			t.Fatal("empty layer list did not stay stable")
 		}
+	}
+}
+
+func TestEnterLayerStatusAndFocus(t *testing.T) {
+	m := modelWithLayers(t, []app.Layer{{Name: "Roads"}, {Name: "Stops"}, {Name: "Zones"}})
+	updateModel(t, m, tea.WindowSizeMsg{Width: 120, Height: 24})
+	if cmd := updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter}); cmd != nil {
+		t.Fatal("opening a layer must not start processing")
+	}
+	if m.editor.Pane() != panel.CategoryPane || m.scaffoldOptions(m.layout()).SelectedLayer != 0 || m.scaffoldOptions(m.layout()).Layers[0].Status != panel.ListIncomplete {
+		t.Fatal("Enter must mark the current layer incomplete and focus Categories")
+	}
+	buffer := uv.NewScreenBuffer(m.width, m.height)
+	uv.NewStyledString(m.View().Content).Draw(buffer, buffer.Bounds())
+	indicator, name := buffer.CellAt(4, 6), buffer.CellAt(6, 6)
+	if indicator.Content != "●" || !sameColor(indicator.Style.Fg, lipgloss.Color("3")) {
+		t.Fatal("opened layer did not show a yellow filled circle")
+	}
+	if !sameColor(name.Style.Fg, lipgloss.Color("252")) || !sameColor(name.Style.Bg, lipgloss.Color("236")) || name.Style.Attrs&uv.AttrBold == 0 {
+		t.Fatal("selected layer must keep its full highlight after focus leaves Layers")
+	}
+	for _, code := range []rune{tea.KeyEnter, tea.KeyUp, tea.KeyDown} {
+		updateModel(t, m, tea.KeyPressMsg{Code: code})
+		if m.editor.Pane() != panel.CategoryPane || m.scaffoldOptions(m.layout()).SelectedLayer != 0 || m.scaffoldOptions(m.layout()).Layers[1].Status != panel.ListUnopened {
+			t.Fatal("Category inputs must remain inactive")
+		}
+	}
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt})
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyDown})
+	if m.scaffoldOptions(m.layout()).Layers[0].Status != panel.ListIncomplete || m.scaffoldOptions(m.layout()).Layers[1].Status != panel.ListUnopened {
+		t.Fatal("moving selection must not change readiness")
+	}
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.editor.Pane() != panel.CategoryPane || m.scaffoldOptions(m.layout()).SelectedLayer != 1 || m.scaffoldOptions(m.layout()).Layers[0].Status != panel.ListIncomplete || m.scaffoldOptions(m.layout()).Layers[1].Status != panel.ListIncomplete || m.scaffoldOptions(m.layout()).Layers[2].Status != panel.ListUnopened {
+		t.Fatal("multiple opened layers must remain incomplete independently")
+	}
+	buffer = uv.NewScreenBuffer(m.width, m.height)
+	uv.NewStyledString(m.View().Content).Draw(buffer, buffer.Bounds())
+	oldIndicator, oldName := buffer.CellAt(4, 6), buffer.CellAt(6, 6)
+	newIndicator, newName := buffer.CellAt(4, 9), buffer.CellAt(6, 9)
+	if !sameColor(oldIndicator.Style.Fg, lipgloss.Color("3")) || !sameColor(newIndicator.Style.Fg, lipgloss.Color("3")) || !sameColor(oldName.Style.Bg, lipgloss.Color("234")) || !sameColor(newName.Style.Bg, lipgloss.Color("236")) {
+		t.Fatal("incomplete status must stay yellow independently of the selected fill")
+	}
+	// Reopening the first layer keeps its status and moves back to Categories.
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt})
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyUp})
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.editor.Pane() != panel.CategoryPane || m.scaffoldOptions(m.layout()).Layers[0].Status != panel.ListIncomplete || m.scaffoldOptions(m.layout()).Layers[1].Status != panel.ListIncomplete {
+		t.Fatal("reopening a layer changed its readiness")
+	}
+}
+
+func TestLayerStatusesPreserved(t *testing.T) {
+	layers := make([]app.Layer, 10)
+	for i := range layers {
+		layers[i].Name = fmt.Sprintf("Layer %02d", i)
+	}
+	m := modelWithLayers(t, layers)
+	updateModel(t, m, tea.WindowSizeMsg{Width: 120, Height: 24})
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt})
+	for i := 0; i < 7; i++ {
+		updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	for i := 0; i < 5; i++ {
+		updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt})
+	}
+	updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
+	for _, code := range []rune{tea.KeyEnter, tea.KeyUp, tea.KeyDown} {
+		updateModel(t, m, tea.KeyPressMsg{Code: code})
+	}
+	updateModel(t, m, tea.WindowSizeMsg{Width: 120, Height: 12})
+	updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
+	for _, size := range []tea.WindowSizeMsg{{Width: 1, Height: 1}, {Width: 180, Height: 40}, {Width: 120, Height: 24}} {
+		updateModel(t, m, size)
+		m.View()
+	}
+	if m.editor.Pane() != panel.CategoryPane || m.scaffoldOptions(m.layout()).SelectedLayer != 7 || m.scaffoldOptions(m.layout()).FirstVisibleLayer != 4 {
+		t.Fatal("focus, help, or resizing lost the selected layer/window")
+	}
+	for i, item := range m.scaffoldOptions(m.layout()).Layers {
+		want := panel.ListUnopened
+		if i == 0 || i == 7 {
+			want = panel.ListIncomplete
+		}
+		if item.Status != want {
+			t.Errorf("layer %d: readiness changed to %d, want %d", i, item.Status, want)
+		}
+	}
+}
+
+func TestEnterWithLayerHelpOpen(t *testing.T) {
+	m := scaffoldModel(t)
+	updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !m.help.ShowAll || m.editor.Pane() != panel.LayerPane || m.scaffoldOptions(m.layout()).Layers[0].Status != panel.ListUnopened {
+		t.Fatal("Enter while help is open must not open or mark a layer")
+	}
+	updateModel(t, m, tea.KeyPressMsg{Code: '?', Text: "?"})
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.editor.Pane() != panel.CategoryPane || m.scaffoldOptions(m.layout()).Layers[0].Status != panel.ListIncomplete {
+		t.Fatal("Enter did not resume when help closed")
 	}
 }

@@ -3,9 +3,11 @@ package tui
 
 import (
 	"GeoFlatpack/internal/app"
-	"GeoFlatpack/internal/tui/panel"
+	"GeoFlatpack/internal/tui/editor"
+	"GeoFlatpack/internal/tui/terminalpreview"
+	"GeoFlatpack/internal/tui/workflow"
+	"GeoFlatpack/style/maplibre/svg"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -24,120 +26,106 @@ const (
 	failureScreen
 )
 
-// Model retains the loaded session for future processing screens. Run owns its
-// preparation and cleanup lifecycle.
+// Model coordinates screens, global shortcuts, and the editor, preview, and
+// workflow subsystems. Run owns preparation and cleanup.
 type Model struct {
-	Options           app.Options
-	help              help.Model
-	keys              keyMap
-	detailKeys        detailKeyMap
-	styles            styles
-	width             int
-	height            int
-	spinner           spinner.Model
-	viewport          viewport.Model
-	screen            screen
-	activePane        panel.Pane
-	layers            []panel.ListItem
-	categories        []categoryState
-	stylingCatalog    stylingCatalog
-	selectedLayer     int
-	firstVisibleLayer int
-	startedAt         time.Time
-	elapsed           time.Duration
-	quitting          bool
-	err               error
-	session           loadedSession
-	preparation       *preparation
-	writeOperation    *writeOperation
-	writing           bool
-	writeStatus       string
-	writeErr          error
-	preview           *previewState
+	Options    app.Options
+	help       help.Model
+	keys       keyMap
+	detailKeys detailKeyMap
+	styles     styles
+	width      int
+	height     int
+	spinner    spinner.Model
+	viewport   viewport.Model
+	screen     screen
+	editor     *editor.Editor
+	startedAt  time.Time
+	elapsed    time.Duration
+	quitting   bool
+	err        error
+	workflow   *workflow.Workflow
+	preview    *terminalpreview.State
 }
 
 var _ tea.Model = (*Model)(nil)
 
 // NewModel creates a loading screen; Init schedules input preparation.
 func NewModel(opts app.Options) *Model {
-	return newModel(opts, prepareInput)
+	return newModel(opts, workflow.PrepareInput)
 }
 
-func newModel(opts app.Options, prepare prepareFunc) *Model {
+func newModel(opts app.Options, prepare workflow.PrepareFunc) *Model {
 	s := newStyles()
 	h := help.New()
 	h.Styles = s.help
 	m := &Model{
-		Options:        opts,
-		help:           h,
-		keys:           newKeyMap(),
-		detailKeys:     newDetailKeyMap(),
-		styles:         s,
-		stylingCatalog: cachedStylingCatalog(),
-		width:          80,
-		height:         24,
-		spinner:        spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(s.title)),
-		viewport:       viewport.New(),
-		startedAt:      time.Now(),
-		preparation:    newPreparation(prepare),
+		Options:    opts,
+		help:       h,
+		keys:       newKeyMap(),
+		detailKeys: newDetailKeyMap(),
+		styles:     s,
+		editor:     editor.New(),
+		width:      80,
+		height:     24,
+		spinner:    spinner.New(spinner.WithSpinner(spinner.Dot), spinner.WithStyle(s.title)),
+		viewport:   viewport.New(),
+		startedAt:  time.Now(),
+		workflow:   workflow.New(prepare),
 	}
+
 	m.viewport.SetHorizontalStep(0)
 	m.refreshViewport()
+
 	return m
 }
 
 func (m *Model) Init() tea.Cmd {
 	var graphics tea.Cmd
 	if m.preview != nil {
-		graphics = m.preview.init()
+		graphics = m.preview.Init()
 	}
-	return tea.Batch(m.preparation.command(m.Options), m.spinner.Tick, graphics)
+
+	return tea.Batch(m.workflow.Prepare(m.Options), m.spinner.Tick, graphics)
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	graphics := m.previewInput(msg)
+	m.editor.SetContext(m.Options.WriteFGB, m.editorVisible())
+	var graphics tea.Cmd
+	if m.preview != nil {
+		graphics = m.preview.Input(msg, m.previewDimensions())
+	}
+
 	switch msg := msg.(type) {
-	case writeDoneMsg:
-		if msg.operation == nil || msg.operation != m.writeOperation {
+	case workflow.WriteDoneMsg:
+		if !m.workflow.Complete(msg) {
 			break
 		}
-		m.writing = false
-		m.writeErr = msg.err
-		directory := "."
-		if m.session != nil {
-			if layers := m.session.Layers(); len(layers) > 0 {
-				directory = filepath.Dir(layers[0].OutputPath)
-			}
-		}
-		m.writeStatus = fmt.Sprintf("Written files to %q", directory)
-		if msg.err != nil {
-			m.writeStatus = "Write failed: " + msg.err.Error()
-		}
-		if m.quitting {
-			return m, m.quitCommand()
-		}
-	case preparedMsg:
-		m.elapsed, m.err = msg.elapsed, msg.err
 
 		if m.quitting {
 			return m, m.quitCommand()
 		}
-		if msg.err != nil {
+	case workflow.PreparedMsg:
+		m.elapsed, m.err = msg.Elapsed, msg.Err
+		if m.quitting {
+			return m, m.quitCommand()
+		}
+
+		if msg.Err != nil {
 			m.screen = failureScreen
 		} else {
-			m.session = msg.session
-			m.layers = nil
-			m.categories = nil
-			if m.session != nil {
-				layers := m.session.Layers()
-				m.layers = layerItems(layers)
-				for _, layer := range layers {
-					m.categories = append(m.categories, newCategoryState(layer.Data))
-				}
+			m.workflow.Prepared(msg)
+			var layers []app.Layer
+			var icons map[string]svg.Svg
+			if msg.Session != nil {
+				layers, icons = msg.Session.Layers(), msg.Session.Icons()
 			}
+
+			m.editor.Load(layers, icons, msg.Session != nil)
 			m.screen = completionScreen
 		}
+
 		m.viewport.GotoTop()
 	case spinner.TickMsg:
 		if m.screen == loadingScreen {
@@ -145,38 +133,40 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner, cmd = m.spinner.Update(msg)
 		}
 	case tea.WindowSizeMsg:
-		m.stopColorDragging()
+		m.editor.StopDragging()
 		m.width, m.height = max(1, msg.Width), max(1, msg.Height)
 	case tea.MouseClickMsg, tea.MouseMotionMsg, tea.MouseReleaseMsg:
-		if m.screen == scaffoldScreen && !m.help.ShowAll && !m.writing {
-			cmd = m.colorMouseInput(msg)
+		if m.screen == scaffoldScreen && !m.help.ShowAll && !m.workflow.Busy() {
+			l := m.layout()
+			cmd = m.editor.MouseInput(msg, m.scaffoldOptions(l), l.frame.GetPaddingLeft(), l.frame.GetPaddingTop()+l.headerHeight+l.gap)
 		}
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.keys.Quit):
-			if m.screen == loadingScreen || m.writing {
+			if m.screen == loadingScreen || m.workflow.Busy() {
 				m.quitting = true
-				if m.writing {
-					m.writeStatus = "Finishing write before exiting…"
+				if m.workflow.Busy() {
+					m.workflow.Quitting()
 				}
+
 				break
 			}
+
 			return m, m.quitCommand()
-		case m.writing:
+		case m.workflow.Busy():
 			// The writer exclusively owns the session until its result arrives.
-		case key.Matches(msg, m.keys.PreviewSample) && m.screen == scaffoldScreen && !m.help.ShowAll && !m.controlsEditing() && m.preview != nil && m.preview.phase == 2:
-			m.preview.sample = !m.preview.sample
-		case key.Matches(msg, m.keys.WriteFiles) && m.screen == scaffoldScreen && !m.help.ShowAll && !m.controlsEditing():
+		case key.Matches(msg, m.keys.PreviewSample) && m.screen == scaffoldScreen && !m.help.ShowAll && !m.editor.Editing() && m.preview != nil && m.preview.Supported():
+			m.preview.ToggleSample()
+		case key.Matches(msg, m.keys.WriteFiles) && m.screen == scaffoldScreen && !m.help.ShowAll && !m.editor.Editing():
 			cmd = m.startWrite()
 		case key.Matches(msg, m.keys.Select) && m.screen == completionScreen:
 			m.screen = scaffoldScreen
-			m.activePane = panel.LayerPane
-			m.selectedLayer, m.firstVisibleLayer = 0, 0
+			m.editor.Open()
 			m.viewport.GotoTop()
 			m.help.ShowAll = false
 			m.keys.Help.SetHelp("?", "help")
-		case key.Matches(msg, m.keys.Help) && !m.controlsEditing():
-			m.stopColorDragging()
+		case key.Matches(msg, m.keys.Help) && !m.editor.Editing():
+			m.editor.StopDragging()
 			m.help.ShowAll = !m.help.ShowAll
 			m.viewport.GotoTop()
 			if m.help.ShowAll {
@@ -184,77 +174,63 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.keys.Help.SetHelp("?", "help")
 			}
-		case key.Matches(msg, m.keys.RightPane) && m.screen == scaffoldScreen && !m.help.ShowAll:
-			m.stopColorDragging()
-			m.activePane = (m.activePane + 1) % panel.PaneCount
-		case key.Matches(msg, m.keys.LeftPane) && m.screen == scaffoldScreen && !m.help.ShowAll:
-			m.stopColorDragging()
-			m.activePane = (m.activePane + panel.PaneCount - 1) % panel.PaneCount
-		case key.Matches(msg, m.keys.Back) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.ControlsPane && !m.controlsEditing():
-			m.activePane = panel.FeatureStylingPane
-		case key.Matches(msg, m.keys.SelectionUp) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.LayerPane:
-			m.selectedLayer = panel.MoveListSelection(m.selectedLayer, -1, len(m.layers))
-		case key.Matches(msg, m.keys.SelectionDown) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.LayerPane:
-			m.selectedLayer = panel.MoveListSelection(m.selectedLayer, 1, len(m.layers))
-		case key.Matches(msg, m.keys.Select) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.LayerPane && len(m.layers) > 0:
-			if m.layers[m.selectedLayer].Status == panel.ListUnopened {
-				m.layers[m.selectedLayer].Status = panel.ListIncomplete
-			}
-			m.activePane = panel.CategoryPane
-		case key.Matches(msg, m.keys.SelectionUp) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.CategoryPane:
-			if categories := m.currentCategories(); categories != nil {
-				categories.selected = panel.MoveListSelection(categories.selected, -1, len(categories.items))
-			}
-		case key.Matches(msg, m.keys.SelectionDown) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.CategoryPane:
-			if categories := m.currentCategories(); categories != nil {
-				categories.selected = panel.MoveListSelection(categories.selected, 1, len(categories.items))
-			}
-		case key.Matches(msg, m.keys.Select) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.CategoryPane:
-			if categories := m.currentCategories(); categories != nil && len(categories.items) > 0 {
-				categories.activate()
-				m.layers[m.selectedLayer].Status = panel.ListIncomplete
-				m.activePane = panel.FeaturesPane
-			}
-		case key.Matches(msg, m.keys.SelectionUp) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.FeaturesPane:
-			if features := m.currentFeatures(); features != nil {
-				features.selected = panel.MoveListSelection(features.selected, -1, len(features.items))
-			}
-		case key.Matches(msg, m.keys.SelectionDown) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.FeaturesPane:
-			if features := m.currentFeatures(); features != nil {
-				features.selected = panel.MoveListSelection(features.selected, 1, len(features.items))
-			}
-		case key.Matches(msg, m.keys.Select) && m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.FeaturesPane:
-			if features := m.currentFeatures(); features != nil && len(features.items) > 0 {
-				features.choose()
-				m.activePane = panel.FeatureStylingPane
-			}
-		case m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.FeatureStylingPane:
-			m.stylingInput(msg)
-		case m.screen == scaffoldScreen && !m.help.ShowAll && m.activePane == panel.ControlsPane:
-			cmd = m.controlsInput(msg)
 		default:
-			if m.help.ShowAll || m.screen != scaffoldScreen {
+			if m.editorVisible() {
+				cmd = m.editor.Input(msg)
+			} else {
 				m.refreshViewport()
 				m.viewport, cmd = m.viewport.Update(msg)
 			}
 		}
 	default:
-		if !m.writing && m.controlsEditing() {
-			cmd = m.controlsInput(msg)
+		if !m.workflow.Busy() && m.editor.Editing() {
+			cmd = m.editor.Input(msg)
 		}
 	}
+
 	m.refreshViewport()
+
 	return m, tea.Batch(cmd, graphics, m.refreshPreview())
 }
 
-func (m *Model) View() tea.View {
-	m.refreshViewport()
-	view := tea.NewView(m.panel())
-	view.AltScreen = true
-	if m.screen == scaffoldScreen && !m.help.ShowAll && !m.writing {
-		if _, ok := m.colorPickerOptions(); ok {
-			view.MouseMode = tea.MouseModeAllMotion
-		}
+func (m *Model) editorVisible() bool {
+	return m.screen == scaffoldScreen && !m.help.ShowAll && !m.workflow.Busy()
+}
+
+func (m *Model) canWrite() bool {
+	return m.editorVisible() && !m.editor.Editing() && (m.Options.WriteFGB || m.Options.WriteStyle) && m.workflow.Session() != nil && m.editor.Ready()
+}
+
+func (m *Model) startWrite() tea.Cmd {
+	m.editor.RefreshReadiness()
+	var err error
+	if !m.Options.WriteFGB && !m.Options.WriteStyle {
+		err = fmt.Errorf("No outputs enabled")
+	} else if m.workflow.Session() == nil || !m.editor.Ready() {
+		err = fmt.Errorf("Complete all layers before writing")
 	}
-	return view
+
+	var selections []app.StyleSelection
+	if err == nil {
+		selections, err = m.editor.Selections()
+	}
+
+	return m.workflow.Start(selections, err)
+}
+
+func (m *Model) quitCommand() tea.Cmd { return m.preview.Quit() }
+
+func (m *Model) refreshPreview() tea.Cmd {
+	if !m.preview.Supported() {
+		return nil
+	}
+
+	visible := m.editorVisible() && !m.quitting && m.workflow.Session() != nil
+	var snapshot editor.Target
+	var err error
+	if visible {
+		snapshot, err = m.editor.PreviewTarget()
+	}
+
+	return m.preview.Refresh(snapshot, err, m.previewDimensions(), visible)
 }

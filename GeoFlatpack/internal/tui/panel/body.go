@@ -28,6 +28,7 @@ func Body(opts BodyOptions) string {
 		if opts.HeadingHeight > 1 {
 			heading += "\n"
 		}
+
 		body = append(body, heading)
 	}
 
@@ -43,5 +44,6 @@ func bodyHeading(width int, showHelp bool, title lipgloss.Style) string {
 	if showHelp {
 		heading = "Keyboard reference"
 	}
+
 	return title.Render(ansi.Truncate(heading, width, ""))
 }
