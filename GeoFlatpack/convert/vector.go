@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"GeoFlatpack/validate"
 	"crypto/rand"
 	"errors"
 	"fmt"
@@ -9,7 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/airbusgeo/godal"
+	godal "github.com/airbusgeo/godal"
 )
 
 // MemoryFGB owns one GDAL dataset and its virtual file. Call Close after use.
@@ -21,11 +22,25 @@ type MemoryFGB struct {
 	path        string
 }
 
-// GmlToFgb converts each input layer independently, preserving GDAL layer order.
+type VectorGeometry struct {
+	InputPath     string
+	ForceEPSG4326 bool
+	SkipFailures  bool
+	Format        validate.VectorFormat
+}
+
+// VectorToFgb converts each input layer independently, preserving GDAL layer order.
 // The caller owns every returned MemoryFGB; failures release partial results.
-func GmlToFgb(input string, forceEPSG4326 bool, skipFailures bool) (files []*MemoryFGB, err error) {
+func VectorToFgb(geometry VectorGeometry) (files []*MemoryFGB, err error) {
 	godal.RegisterAll()
-	src, err := godal.Open(input, godal.VectorOnly(), godal.DriverOpenOption("WRITE_GFS=NO"))
+
+	options := []godal.OpenOption{godal.VectorOnly()}
+
+	if geometry.Format == validate.FGB {
+		options = append(options, godal.DriverOpenOption("WRITE_GFS=NO"))
+	}
+
+	src, err := godal.Open(geometry.InputPath, options...)
 
 	if err != nil {
 		return nil, fmt.Errorf("open GML: %w", err)
@@ -46,7 +61,7 @@ func GmlToFgb(input string, forceEPSG4326 bool, skipFailures bool) (files []*Mem
 		return nil, err
 	}
 
-	return convertLayers(src, fmt.Sprintf("/vsimem/gfp-%x", id[:]), forceEPSG4326, skipFailures)
+	return convertLayers(src, fmt.Sprintf("/vsimem/gfp-%x", id[:]), geometry.ForceEPSG4326, geometry.SkipFailures)
 }
 
 func convertLayers(src *godal.Dataset, prefix string, forceEPSG4326, skipFailures bool) (files []*MemoryFGB, err error) {

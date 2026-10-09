@@ -60,9 +60,12 @@ func Prepare(opts Options, out io.Writer) (_ *Session, err error) {
 	if out == nil {
 		out = io.Discard
 	}
-	if err := validate.Gml(opts.Input); err != nil {
+
+	Inputformat, err := validate.InputFormat(opts.Input)
+	if err != nil {
 		return nil, err
 	}
+	
 	if err := validate.Format(validate.StyleFormat(opts.Format)); err != nil {
 		return nil, err
 	}
@@ -83,7 +86,12 @@ func Prepare(opts Options, out io.Writer) (_ *Session, err error) {
 		_, _ = fmt.Fprintln(out, "gfp: converting every GML layer to FlatGeobuf...")
 	}
 
-	files, err := convert.GmlToFgb(opts.Input, opts.ForceEPSG4326, opts.SkipFailures)
+	files, err := convert.VectorToFgb(convert.VectorGeometry{
+		InputPath:     opts.Input,
+		ForceEPSG4326: opts.ForceEPSG4326,
+		SkipFailures:  opts.SkipFailures,
+		Format:        Inputformat,
+	})
 	if err != nil {
 		return nil, err
 	}
