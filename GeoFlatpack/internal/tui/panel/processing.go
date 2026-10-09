@@ -50,6 +50,7 @@ func Processing(opts ProcessingOptions) string {
 		if opts.Quitting {
 			message = "Finishing processing before exiting…"
 		}
+
 		status = opts.Spinner + " " + message
 	case Failure:
 		status = opts.FailureStyle.Render(fmt.Sprintf("Could not process input\n%s", opts.Err))
@@ -84,6 +85,7 @@ func Processing(opts ProcessingOptions) string {
 	if count != "" {
 		parts = append(parts, count)
 	}
+
 	if opts.SVGDir != "" {
 		directory := filepath.Clean(opts.SVGDir)
 		icons := tree.Root(ansi.Wrap(listText(filepath.Base(directory)), max(1, opts.Width), "")).RootStyle(opts.TitleStyle).
@@ -97,6 +99,7 @@ func Processing(opts ProcessingOptions) string {
 		} else if opts.State == Loading {
 			icons.Child(opts.MutedStyle.Render("Reading SVGs…"))
 		}
+
 		parts = append(parts, "", opts.MutedStyle.Render(filepath.Dir(directory)), icons.String())
 		if opts.Loaded && opts.State != Failure {
 			parts = append(parts, opts.MutedStyle.Render(fmt.Sprintf("Loaded SVGs: %d", len(opts.SVGNames))))

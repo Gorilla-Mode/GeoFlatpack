@@ -2,6 +2,7 @@ package tui
 
 import (
 	"GeoFlatpack/internal/app"
+	"GeoFlatpack/internal/tui/terminalpreview"
 	"errors"
 	"io"
 
@@ -16,10 +17,10 @@ func Run(opts app.Options, in io.Reader, out io.Writer) error {
 }
 
 func runModel(model *Model, in io.Reader, out io.Writer, options ...tea.ProgramOption) (err error) {
-	model.preview = newPreviewState()
+	model.preview = terminalpreview.New()
 	defer func() {
-		err = errors.Join(err, model.preview.close(), model.writeOperation.finish(), model.preparation.finish())
-		if cleanup := model.preview.cleanupImages(); cleanup != "" {
+		err = errors.Join(err, model.preview.Close(), model.workflow.Finish())
+		if cleanup := model.preview.CleanupImages(); cleanup != "" {
 			_, _ = io.WriteString(out, cleanup)
 		}
 	}()

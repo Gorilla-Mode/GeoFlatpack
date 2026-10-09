@@ -19,6 +19,7 @@ func KeyboardReference(groups [][]key.Binding, styles help.Styles, muted lipglos
 			if !binding.Enabled() {
 				continue
 			}
+
 			h := binding.Help()
 			rows = append(rows, styles.FullKey.Render(h.Key)+" "+styles.FullDesc.Render(h.Desc))
 		}
