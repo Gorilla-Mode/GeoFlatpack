@@ -151,7 +151,7 @@ func convertLayer(src *godal.Dataset, name, path string, forceEPSG4326, skipFail
 				return nil
 			}
 
-			if category >= godal.CE_Warning {
+			if category >= godal.CE_Failure {
 				return fmt.Errorf("%s", msg)
 			}
 
