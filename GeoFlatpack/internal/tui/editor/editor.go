@@ -48,6 +48,10 @@ func (m *Editor) Focus(pane panel.Pane) {
 	m.StopDragging()
 	m.activePane = pane
 	if pane != panel.ControlsPane {
+		if c := m.conditionEditor; c != nil {
+			c.editing, c.choosing = false, false
+			c.input.Blur()
+		}
 		m.conditionEditor = nil
 	}
 }

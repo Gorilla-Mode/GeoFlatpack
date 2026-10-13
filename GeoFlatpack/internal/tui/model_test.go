@@ -20,6 +20,8 @@ import (
 	"charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/gogama/flatgeobuf/flatgeobuf/flat"
+	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 type testSession struct {
@@ -450,6 +452,85 @@ func modelWithLayers(t *testing.T, layers []app.Layer) *Model {
 	updateModel(t, m, workflow.PreparedMsg{Session: &testSession{layers: layers}})
 	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	return m
+}
+
+func TestConditionalValueChooserGlobalShortcutsAndHints(t *testing.T) {
+	b := flatbuffers.NewBuilder(0)
+	flat.HeaderStart(b)
+	b.Finish(flat.HeaderEnd(b))
+	data := &fgb.Fgb{Header: flat.GetRootAsHeader(b.FinishedBytes(), 0)}
+	for _, value := range []string{"a", "z"} {
+		b = flatbuffers.NewBuilder(0)
+		flat.GeometryStartXyVector(b, 2)
+		b.PrependFloat64(1)
+		b.PrependFloat64(1)
+		xy := b.EndVector(2)
+		flat.GeometryStart(b)
+		flat.GeometryAddType(b, flat.GeometryTypePoint)
+		flat.GeometryAddXy(b, xy)
+		geometry := flat.GeometryEnd(b)
+		flat.FeatureStart(b)
+		flat.FeatureAddGeometry(b, geometry)
+		b.Finish(flat.FeatureEnd(b))
+		data.Features = append(data.Features, fgb.Feature{Raw: *flat.GetRootAsFeature(b.FinishedBytes(), 0), Properties: map[string]any{"kind": value}})
+	}
+	m := modelWithLayers(t, []app.Layer{{Name: "source", SourceID: "source", Data: data}})
+	m.Options.WriteFGB = true
+	updateModel(t, m, tea.WindowSizeMsg{Width: 300, Height: 60})
+	press := func(code rune) {
+		msg := tea.KeyPressMsg{Code: code}
+		if code >= 32 && code < 127 {
+			msg.Text = string(code)
+		}
+		updateModel(t, m, msg)
+	}
+	for _, code := range []rune{tea.KeyEnter, tea.KeyDown, 'c', 'h', tea.KeyEnter, tea.KeyEnter, tea.KeyEnter} {
+		press(code)
+	}
+	if !m.editor.Context().ChoosingValue || !m.editor.Editing() {
+		t.Fatal("string value chooser did not open")
+	}
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "Select value") || !strings.Contains(view, "Choose value") || strings.Contains(view, "Cursor") {
+		t.Fatal("chooser footer does not describe value selection")
+	}
+	status := m.workflow.Status()
+	for _, code := range []rune{'w', 'W', '?', 'd', 'D'} {
+		press(code)
+		if m.help.ShowAll || m.workflow.Busy() || m.workflow.Status() != status || !m.editor.Context().ChoosingValue || m.canWrite() {
+			t.Fatalf("global shortcut %c intercepted chooser", code)
+		}
+	}
+	press(tea.KeyEscape)
+	if m.editor.Editing() || m.editor.Pane() != panel.ControlsPane {
+		t.Fatal("Escape did not close chooser back to form")
+	}
+	press(tea.KeyEnter)
+	press(tea.KeyDown)
+	press(tea.KeyEnter)
+	opts := m.scaffoldOptions(m.layout())
+	if opts.Controls[2].Value != `"z"` || opts.Controls[2].Error != "" {
+		t.Fatal("Enter did not commit selected string")
+	}
+	press(tea.KeyEnter)
+	press(tea.KeyDown) // Custom action after current string.
+	press(tea.KeyEnter)
+	if !m.editor.Context().Editing || m.editor.Context().ChoosingValue || !strings.Contains(ansi.Strip(m.View().Content), "Cursor") {
+		t.Fatal("custom input did not show text-editing hints")
+	}
+	press('?')
+	press('w')
+	if m.help.ShowAll || m.workflow.Status() != status {
+		t.Fatal("global shortcuts intercepted custom input")
+	}
+	press(tea.KeyEscape)
+	if !m.editor.Context().ChoosingValue {
+		t.Fatal("custom cancellation did not return to chooser")
+	}
+	press(tea.KeyBackspace)
+	if m.editor.Pane() != panel.CategoryPane || m.editor.Editing() {
+		t.Fatal("Backspace did not return to Categories")
+	}
 }
 
 func TestSessionLayerPresentation(t *testing.T) {

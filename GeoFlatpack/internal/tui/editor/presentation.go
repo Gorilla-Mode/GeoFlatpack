@@ -81,7 +81,13 @@ func (m *Editor) RefreshWindows(opts panel.ScaffoldOptions) {
 	}
 
 	if m.conditionEditor != nil {
-		m.conditionEditor.firstVisible = panel.ControlsWindow(m.Presentation(opts))
+		c := m.conditionEditor
+		first := panel.ControlsWindow(m.Presentation(opts))
+		if c.choosing && !c.editing {
+			c.choiceFirstVisible = first
+		} else {
+			c.firstVisible = first
+		}
 	} else if _, _, c := m.currentControl(); c != nil {
 		c.firstVisible = panel.ControlsWindow(m.Presentation(opts))
 	}
@@ -95,6 +101,7 @@ type Context struct {
 	Icons, ChangingIcon                                           bool
 	Edit, Included, IncludedOnly, ChangeSVG                       bool
 	ConditionEditor, ConditionalCategory, MarkedOnly, MarkedField bool
+	ChoosingValue                                                 bool
 }
 
 func (m *Editor) Context() Context {
@@ -107,6 +114,7 @@ func (m *Editor) Context() Context {
 	}
 	if m.conditionEditor != nil {
 		result.Editing = m.conditionEditor.editing
+		result.ChoosingValue = m.conditionEditor.choosing && !m.conditionEditor.editing
 		return result
 	}
 	if _, _, c := m.currentControl(); c != nil {

@@ -71,7 +71,7 @@ func newCategoryState(data *fgb.Fgb) categoryState {
 		}
 
 		state.add(field.Name, field.Name, field.Distinct, field.Examples, groups)
-		state.conditional[len(state.conditional)-1].valueType = inferConditionType(field.Types)
+		state.conditional[len(state.conditional)-1].loadValues(data, field)
 	}
 
 	return state

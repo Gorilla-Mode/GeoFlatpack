@@ -119,6 +119,14 @@ func (m *Model) panel() string {
 			selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Save"))
 			hints = []key.Binding{m.keys.LeftPane, m.keys.RightPane, key.NewBinding(key.WithKeys("left", "right"), key.WithHelp("←/→", "Cursor"))}
 		}
+		if m.editor.Context().ChoosingValue {
+			selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Select value"))
+			hints = []key.Binding{
+				key.NewBinding(key.WithKeys("up", "down", "tab", "shift+tab"), key.WithHelp("↑/↓ · Tab/⇧Tab", "Choose value")),
+				key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "Categories")),
+				m.keys.LeftPane, m.keys.RightPane,
+			}
+		}
 
 		if c := m.editor.Context(); c.Color {
 			selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Adjust / edit"))

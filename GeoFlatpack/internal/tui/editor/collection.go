@@ -301,7 +301,7 @@ func (s *categoryState) collectionSnapshot(preview bool) (*maplibre.ConditionalS
 	for _, field := range collection.fields {
 		definition := maplibre.ConditionalField{Field: s.fields[field]}
 		for _, rule := range s.conditional[field].rules {
-			value, err := rule.value(definition.Field)
+			value, err := s.conditional[field].ruleValue(definition.Field, rule)
 			if err != nil {
 				return nil, fmt.Errorf("field %q condition %s: %w", definition.Field, rule.id, err)
 			}

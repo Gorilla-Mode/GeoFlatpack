@@ -19,14 +19,17 @@ type conditionRuleDraft struct {
 }
 
 type conditionState struct {
-	rules                             []conditionRuleDraft
-	geometries                        []maplibre.StyleGroup
-	features                          featureState
-	valueType                         string
-	nextID                            int
-	selected, firstVisible, ruleIndex int
-	editing                           bool
-	input                             textinput.Model
+	rules                              []conditionRuleDraft
+	geometries                         []maplibre.StyleGroup
+	features                           featureState
+	valueType                          string
+	allowedTypes, stringChoices        []string
+	nextID                             int
+	selected, firstVisible, ruleIndex  int
+	editing                            bool
+	choosing                           bool
+	choiceSelected, choiceFirstVisible int
+	input                              textinput.Model
 }
 
 func inferConditionType(types []string) string {
@@ -89,7 +92,7 @@ func (r conditionRuleDraft) value(field string) (any, error) {
 
 func (c *conditionState) valid(field string) bool {
 	for _, r := range c.rules {
-		if _, err := r.value(field); err != nil {
+		if _, err := c.ruleValue(field, r); err != nil {
 			return false
 		}
 	}
@@ -150,7 +153,7 @@ func (c *conditionState) snapshot(field string, preview bool) (*maplibre.Conditi
 	result := &maplibre.ConditionalStyle{Field: field, Otherwise: make(map[maplibre.GeometryType][]maplibre.RenderLayerStyle)}
 	indices := make(map[string]int)
 	for _, draft := range c.rules {
-		value, err := draft.value(field)
+		value, err := c.ruleValue(field, draft)
 		if err != nil {
 			return nil, fmt.Errorf("condition %s: %w", draft.id, err)
 		}
@@ -188,7 +191,7 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 			case "enter":
 				r := &c.rules[c.selected/3]
 				r.text, r.defined = c.input.Value(), true
-				c.editing = false
+				c.editing, c.choosing = false, false
 				c.input.Blur()
 				m.rebuildConditions()
 				return nil
@@ -200,6 +203,9 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 	}
 	if !isKey {
 		return nil
+	}
+	if c.choosing {
+		return m.conditionChoiceInput(key)
 	}
 	c.normalizeFocus()
 	switch key.String() {
@@ -265,20 +271,16 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 		case 0:
 			cycle(&r.operator, []string{"==", "!=", ">", ">=", "<", "<="})
 		case 1:
-			cycle(&r.valueType, []string{"number", "string", "boolean", "missing"})
+			cycle(&r.valueType, c.allowedTypes)
 		case 2:
 			if key.String() != "enter" || r.valueType == "missing" {
 				return nil
 			}
-			c.input = textinput.New()
-			c.input.Prompt = ""
-			styles := c.input.Styles()
-			styles.Cursor.Blink = false
-			c.input.SetStyles(styles)
-			c.input.SetValue(r.text)
-			c.input.CursorEnd()
-			c.editing = true
-			return c.input.Focus()
+			if r.valueType == "string" || r.valueType == "boolean" {
+				c.openValueChooser()
+				return nil
+			}
+			return c.editValue()
 		}
 		m.rebuildConditions()
 	}
@@ -287,12 +289,18 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 
 func (m *Editor) conditionsPresentation(opts *panel.ScaffoldOptions) {
 	c := m.conditionEditor
+	if c.choosing && !c.editing {
+		c.choicesPresentation(opts)
+		return
+	}
 	c.normalizeFocus()
 	width, _ := panel.ControlsDimensions(*opts)
 	for i, rule := range c.rules {
 		values := []string{rule.operator, rule.valueType, rule.text}
 		if rule.valueType == "missing" {
 			values[1], values[2] = "Missing value", "Missing value"
+		} else if rule.valueType == "string" && rule.defined {
+			values[2] = strconv.Quote(rule.text)
 		}
 		for j, label := range []string{"Operator", "Value type", "Value"} {
 			item := panel.ControlItem{Label: fmt.Sprintf("Condition %d · %s", i+1, label), Value: panelText(values[j])}
@@ -301,7 +309,7 @@ func (m *Editor) conditionsPresentation(opts *panel.ScaffoldOptions) {
 			}
 			if j == 2 {
 				item.Disabled = rule.valueType == "missing"
-				if _, err := rule.value(m.conditionField); err != nil {
+				if _, err := c.ruleValue(m.conditionField, rule); err != nil {
 					item.Error = err.Error()
 				}
 			}

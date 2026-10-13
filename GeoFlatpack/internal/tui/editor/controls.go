@@ -566,7 +566,7 @@ func (m *Editor) Editing() bool {
 		return false
 	}
 	if m.conditionEditor != nil {
-		return m.conditionEditor.editing
+		return m.conditionEditor.editing || m.conditionEditor.choosing
 	}
 
 	_, _, c := m.currentControl()
