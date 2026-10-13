@@ -22,29 +22,9 @@ func WithVertexCompanions(data *Fgb, selected map[int]VertexKind) (*Fgb, string,
 		return data, "", nil
 	}
 
-	names := make(map[string]bool)
-	for i := 0; i < data.Header.ColumnsLength(); i++ {
-		var column flat.Column
-		data.Header.Columns(&column, i)
-		names[string(column.Name())] = true
-	}
-
-	for i := range data.Features {
-		for j := 0; j < data.Features[i].Raw.ColumnsLength(); j++ {
-			var column flat.Column
-			data.Features[i].Raw.Columns(&column, j)
-			names[string(column.Name())] = true
-		}
-
-		for name := range data.Features[i].Properties {
-			names[name] = true
-		}
-	}
-
-	const base = "__geoflatpack_vertices"
-	marker := base
-	for suffix := 1; names[marker]; suffix++ {
-		marker = fmt.Sprintf("%s_%d", base, suffix)
+	marker, err := VertexMarkerName(data)
+	if err != nil {
+		return nil, "", err
 	}
 
 	geometries := make([]*geometry, len(data.Features))
@@ -91,6 +71,41 @@ func WithVertexCompanions(data *Fgb, selected map[int]VertexKind) (*Fgb, string,
 	result.Header = packHeader(data.Header, marker, len(result.Features))
 
 	return result, marker, nil
+}
+
+// VertexMarkerName reserves a collision-free name for companion filters, even
+// when a configured conditional symbol stack has no matching source geometry.
+// It does not change the source schema or add any companions.
+func VertexMarkerName(data *Fgb) (string, error) {
+	if data == nil || data.Header == nil {
+		return "", fmt.Errorf("missing FGB or header")
+	}
+	names := make(map[string]bool)
+	for i := 0; i < data.Header.ColumnsLength(); i++ {
+		var column flat.Column
+		data.Header.Columns(&column, i)
+		names[string(column.Name())] = true
+	}
+
+	for i := range data.Features {
+		for j := 0; j < data.Features[i].Raw.ColumnsLength(); j++ {
+			var column flat.Column
+			data.Features[i].Raw.Columns(&column, j)
+			names[string(column.Name())] = true
+		}
+
+		for name := range data.Features[i].Properties {
+			names[name] = true
+		}
+	}
+
+	const base = "__geoflatpack_vertices"
+	marker := base
+	for suffix := 1; names[marker]; suffix++ {
+		marker = fmt.Sprintf("%s_%d", base, suffix)
+	}
+
+	return marker, nil
 }
 
 func prepareFeatureCompanion(feature *Feature, fallback flat.GeometryType, kind VertexKind, wanted bool, index int) (*geometry, *geometry, error) {

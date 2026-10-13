@@ -29,10 +29,13 @@ func (m *Editor) Presentation(opts panel.ScaffoldOptions) panel.ScaffoldOptions 
 
 func (m *Editor) present(opts *panel.ScaffoldOptions) {
 	if categories := m.currentCategories(); categories != nil {
-		opts.Categories = categories.items
-		opts.SelectedCategory = categories.selected
+		opts.Categories, opts.SelectedCategory = categories.visibleItems()
+		opts.EditingCategory = m.conditionEditor != nil && m.activePane == panel.ControlsPane
 		opts.FirstVisibleCategory = categories.firstVisible
 		opts.CategoryEmptyText = categories.emptyText
+		if categories.markedOnly {
+			opts.CategoryEmptyText = "No conditional fields marked (c in all fields)"
+		}
 		opts.FeatureEmptyText = "Choose a category"
 	}
 
@@ -77,22 +80,43 @@ func (m *Editor) RefreshWindows(opts panel.ScaffoldOptions) {
 		}
 	}
 
-	if _, _, c := m.currentControl(); c != nil {
+	if m.conditionEditor != nil {
+		c := m.conditionEditor
+		first := panel.ControlsWindow(m.Presentation(opts))
+		if c.choosing && !c.editing {
+			c.choiceFirstVisible = first
+		} else {
+			c.firstVisible = first
+		}
+	} else if _, _, c := m.currentControl(); c != nil {
 		c.firstVisible = panel.ControlsWindow(m.Presentation(opts))
 	}
 }
 
 // Context describes the current editor actions for the root's shortcut hints.
 type Context struct {
-	Color, Editing, Adjusting               bool
-	ColorSelected                           int
-	HasStyling, Selecting, LayerSelected    bool
-	Icons, ChangingIcon                     bool
-	Edit, Included, IncludedOnly, ChangeSVG bool
+	Color, Editing, Adjusting                                     bool
+	ColorSelected                                                 int
+	HasStyling, Selecting, LayerSelected                          bool
+	Icons, ChangingIcon                                           bool
+	Edit, Included, IncludedOnly, ChangeSVG                       bool
+	ConditionEditor, ConditionalCategory, MarkedOnly, MarkedField bool
+	ChoosingValue                                                 bool
 }
 
 func (m *Editor) Context() Context {
 	var result Context
+	result.ConditionEditor = m.conditionEditor != nil
+	if c := m.currentCategories(); c != nil {
+		result.MarkedOnly = c.markedOnly
+		result.ConditionalCategory = c.collectionActive
+		result.MarkedField = len(c.visibleIndices()) > 0 && c.items[c.selected].Conditional
+	}
+	if m.conditionEditor != nil {
+		result.Editing = m.conditionEditor.editing
+		result.ChoosingValue = m.conditionEditor.choosing && !m.conditionEditor.editing
+		return result
+	}
 	if _, _, c := m.currentControl(); c != nil {
 		result.Editing = c.editing
 		if c.color != nil {

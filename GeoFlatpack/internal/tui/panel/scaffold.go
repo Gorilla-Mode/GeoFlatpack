@@ -35,6 +35,7 @@ type ScaffoldOptions struct {
 	FirstVisibleLayer    int
 	Categories           []ListItem
 	SelectedCategory     int
+	EditingCategory      bool // Keep the condition editor's field highlighted outside Categories.
 	FirstVisibleCategory int
 	CategoryEmptyText    string
 	Features             []ListItem

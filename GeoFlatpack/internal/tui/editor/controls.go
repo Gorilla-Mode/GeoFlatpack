@@ -33,6 +33,9 @@ type controlRow struct {
 }
 
 func (m *Editor) currentControl() (*styleLayerState, styleProperty, *controlState) {
+	if m.conditionEditor != nil {
+		return nil, styleProperty{}, nil
+	}
 	s := m.currentStyling()
 	if s == nil || s.mode != styleEdit || s.activeLayer() == nil {
 		return nil, styleProperty{}, nil
@@ -562,6 +565,9 @@ func (m *Editor) Editing() bool {
 	if !m.interactive || m.activePane != panel.ControlsPane {
 		return false
 	}
+	if m.conditionEditor != nil {
+		return m.conditionEditor.editing || m.conditionEditor.choosing
+	}
 
 	_, _, c := m.currentControl()
 
@@ -569,6 +575,10 @@ func (m *Editor) Editing() bool {
 }
 
 func (m *Editor) controlsPresentation(opts *panel.ScaffoldOptions) {
+	if m.conditionEditor != nil {
+		m.conditionsPresentation(opts)
+		return
+	}
 	opts.ControlsEmptyText = "Choose a styling option"
 	_, p, c := m.currentControl()
 	if c == nil {

@@ -33,6 +33,9 @@ func (m *Editor) currentFeatures() *featureState {
 		return nil
 	}
 
+	if categories.collectionActive {
+		return categories.collection.features
+	}
 	return &categories.features[categories.active]
 }
 
@@ -58,7 +61,7 @@ func (s *featureState) RefreshReadiness() bool {
 		}
 
 		s.items[i].Status = status
-		complete = complete && status == panel.ListComplete
+		complete = complete && (s.items[i].Omitted || status == panel.ListComplete)
 	}
 
 	return complete
@@ -70,8 +73,15 @@ func (m *Editor) RefreshReadiness() {
 		complete := false
 		for j := range categories.features {
 			ready := categories.features[j].RefreshReadiness()
-			if j == categories.active {
+			categories.conditional[j].features.RefreshReadiness()
+			if !categories.collectionActive && j == categories.active {
 				complete = ready
+			}
+		}
+		if categories.collectionActive {
+			complete = categories.collection.features.RefreshReadiness()
+			for _, field := range categories.collection.fields {
+				complete = categories.conditional[field].valid(categories.fields[field]) && complete
 			}
 		}
 

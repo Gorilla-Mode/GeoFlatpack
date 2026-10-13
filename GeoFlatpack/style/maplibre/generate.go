@@ -48,6 +48,7 @@ type LayerStyle struct {
 	SourceID      string
 	CategoryField string
 	Styles        map[StyleGroup][]RenderLayerStyle
+	Conditional   *ConditionalStyle
 	VertexMarker  string
 }
 
@@ -79,7 +80,7 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle, catalogs
 		}
 
 		var err error
-		groups[i], err = CollectStyleGroups(input.Data, input.CategoryField)
+		groups[i], err = input.StyleGroups()
 
 		if err != nil {
 			return nil, fmt.Errorf("source %q: %w", input.SourceID, err)
@@ -95,6 +96,13 @@ func BuildMapLibreCollectionStyle(filename string, inputs []LayerStyle, catalogs
 
 				id := fmt.Sprintf("%s-%s-%d", input.SourceID, geometry, j)
 				stack, err := resolveGroupStack(input.Styles, group, id)
+				if input.Conditional != nil {
+					stack = input.Conditional.Stack(group)
+					err = nil
+					if len(stack) == 0 {
+						err = fmt.Errorf("group %q: empty conditional style stack", id)
+					}
+				}
 				if err != nil {
 					return nil, err
 				}
@@ -159,6 +167,9 @@ func resolveGroupStack(styles map[StyleGroup][]RenderLayerStyle, group StyleGrou
 }
 
 func buildRenderLayer(input LayerStyle, group StyleGroup, id string, index int, layerStyle RenderLayerStyle, hasLine bool, icons map[string]svg.Svg) (StyleLayer, error) {
+	if input.Conditional != nil {
+		input.CategoryField = ""
+	}
 	if layerStyle.Type != RenderSymbol && !slices.Contains(RenderTypes[group.GeometryType], layerStyle.Type) {
 		return StyleLayer{}, fmt.Errorf("group %q: unsupported render type %q for %s", id, layerStyle.Type, group.GeometryType)
 	}
@@ -190,9 +201,47 @@ func buildRenderLayer(input LayerStyle, group StyleGroup, id string, index int, 
 		}
 	}
 
+	if layerStyle.Type != RenderSymbol {
+		layer.Layout = maps.Clone(layerStyle.Layout)
+	}
+
 	layer.Filter = buildVertexFilter(layer.Filter, group.GeometryType, layerStyle.Type, input.VertexMarker)
+	if input.Conditional != nil {
+		predicate, err := input.Conditional.Predicate(group.RuleID)
+		if err != nil {
+			return StyleLayer{}, err
+		}
+		layer.Filter = []any{"all", layer.Filter, predicate}
+	}
 
 	return layer, nil
+}
+
+// StyleGroups retains all source geometries for every conditional rule.
+func (input LayerStyle) StyleGroups() ([]StyleGroup, error) {
+	if input.Conditional == nil {
+		return CollectStyleGroups(input.Data, input.CategoryField)
+	}
+	if err := input.Conditional.Validate(); err != nil {
+		return nil, err
+	}
+
+	geometries, err := CollectStyleGroups(input.Data, "")
+	if err != nil {
+		return nil, err
+	}
+
+	var groups []StyleGroup
+	for _, geometry := range geometries {
+		for _, id := range input.Conditional.targetIDs() {
+			groups = append(groups, StyleGroup{GeometryType: geometry.GeometryType, RuleID: id})
+		}
+		if _, included := input.Conditional.Otherwise[geometry.GeometryType]; included {
+			groups = append(groups, geometry)
+		}
+	}
+
+	return groups, nil
 }
 
 func buildSymbolLayer(input LayerStyle, group StyleGroup, id, layerID string, layerStyle RenderLayerStyle, icons map[string]svg.Svg) (StyleLayer, error) {

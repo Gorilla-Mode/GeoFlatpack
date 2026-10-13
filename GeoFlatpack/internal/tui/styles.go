@@ -92,14 +92,15 @@ func newStyles() styles {
 		inactivePaneTitle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(colorInactivePane)),
 		list: panel.ListStyles{
-			Item:         lipgloss.NewStyle().Background(lipgloss.Color(colorListBackground)),
-			SelectedItem: lipgloss.NewStyle().Background(lipgloss.Color(colorSelectedListBackground)),
-			Name:         lipgloss.NewStyle().Foreground(lipgloss.Color(colorInactivePane)),
-			SelectedName: lipgloss.NewStyle().Foreground(lipgloss.Color(colorSelectedPane)).Bold(true),
-			Detail:       lipgloss.NewStyle().Foreground(lipgloss.Color(colorInactivePane)),
-			Unopened:     lipgloss.NewStyle().Foreground(lipgloss.Color(colorInactivePane)),
-			Incomplete:   lipgloss.NewStyle().Foreground(lipgloss.Color(colorIncomplete)),
-			Complete:     lipgloss.NewStyle().Foreground(lipgloss.Color(colorSuccess)).Bold(true),
+			Item:            lipgloss.NewStyle().Background(lipgloss.Color(colorListBackground)),
+			SelectedItem:    lipgloss.NewStyle().Background(lipgloss.Color(colorSelectedListBackground)),
+			Name:            lipgloss.NewStyle().Foreground(lipgloss.Color(colorInactivePane)),
+			SelectedName:    lipgloss.NewStyle().Foreground(lipgloss.Color(colorSelectedPane)).Bold(true),
+			ConditionalName: lipgloss.NewStyle().Foreground(lipgloss.Color(colorAccent)),
+			Detail:          lipgloss.NewStyle().Foreground(lipgloss.Color(colorInactivePane)),
+			Unopened:        lipgloss.NewStyle().Foreground(lipgloss.Color(colorInactivePane)),
+			Incomplete:      lipgloss.NewStyle().Foreground(lipgloss.Color(colorIncomplete)),
+			Complete:        lipgloss.NewStyle().Foreground(lipgloss.Color(colorSuccess)).Bold(true),
 		},
 	}
 }

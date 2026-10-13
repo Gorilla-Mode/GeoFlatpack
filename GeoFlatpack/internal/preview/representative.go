@@ -13,6 +13,18 @@ import (
 // RepresentativeIndex uses loaded source order, before serialization sorts the
 // spatial index. A multipart geometry remains a single original feature.
 func RepresentativeIndex(data *fgb.Fgb, field string, group maplibre.StyleGroup) (int, error) {
+	return representativeIndex(data, field, group, nil)
+}
+
+func ConditionalRepresentativeIndex(data *fgb.Fgb, conditional *maplibre.ConditionalStyle, group maplibre.StyleGroup) (int, error) {
+	match, err := conditional.Matcher()
+	if err != nil {
+		return -1, err
+	}
+	return representativeIndex(data, "", group, match)
+}
+
+func representativeIndex(data *fgb.Fgb, field string, group maplibre.StyleGroup, match func(map[string]any) string) (int, error) {
 	if data != nil && data.Header != nil {
 		for i := range data.Features {
 			feature := &data.Features[i]
@@ -36,10 +48,18 @@ func RepresentativeIndex(data *fgb.Fgb, field string, group maplibre.StyleGroup)
 					continue
 				}
 			}
+			if match != nil {
+				if match(feature.Properties) != group.RuleID {
+					continue
+				}
+			}
 			if _, present := geometryBounds(geometry); present {
 				return i, nil
 			}
 		}
+	}
+	if match != nil {
+		return -1, fmt.Errorf("No matching geometry to preview")
 	}
 	return -1, fmt.Errorf("No geometry to preview")
 }

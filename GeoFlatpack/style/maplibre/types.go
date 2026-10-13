@@ -66,6 +66,7 @@ type RenderLayerStyle struct {
 type StyleGroup struct {
 	GeometryType GeometryType
 	Category     CategoryValue
+	RuleID       string // Rule or combination ID; empty identifies conditional Otherwise.
 }
 
 type StyleLayer struct {
