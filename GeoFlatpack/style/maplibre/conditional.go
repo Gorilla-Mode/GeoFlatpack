@@ -10,26 +10,12 @@ import (
 	"strings"
 )
 
-// ConditionalRule compares a feature field with Value and overrides selected
-// fallback paint properties when it matches. Operator is ==, !=, >, >=, <, or <=.
-// Ordering comparisons require a number; equality also accepts strings and bools.
 type ConditionalRule struct {
 	Operator string
 	Value    any
 	Paint    Paint
 }
 
-// ConditionalPaint builds data-driven paint expressions for a feature field.
-// The first matching rule wins for the entire style. Properties omitted by that
-// rule use fallback, and every overridden property must exist in fallback.
-// Missing, null, and incompatible field values do not match a rule. Numeric
-// strings are not converted to numbers.
-//
-// Paint values must be JSON-serializable constants, not expressions. Array values
-// in expression branches are encoded as literals. This function does not check
-// property names, value ranges, or support for data-driven styling: validate the
-// completed stylesheet with MapLibre. It does not modify its inputs; the returned
-// map is new, but nested constant values may be shared with the inputs.
 func ConditionalPaint(field string, rules []ConditionalRule, fallback Paint) (Paint, error) {
 	if strings.TrimSpace(field) == "" {
 		return nil, fmt.Errorf("conditional paint: empty field name")
@@ -40,20 +26,25 @@ func ConditionalPaint(field string, rules []ConditionalRule, fallback Paint) (Pa
 
 	conditions := make([]any, len(rules))
 	changed := make(map[string]bool)
+
 	for i, rule := range rules {
 		condition, err := conditionalComparison(field, rule.Operator, rule.Value)
 		if err != nil {
 			return nil, fmt.Errorf("conditional paint rule %d: %w", i+1, err)
 		}
+
 		conditions[i] = condition
 		if _, err := json.Marshal(rule.Paint); err != nil {
 			return nil, fmt.Errorf("conditional paint rule %d: %w", i+1, err)
 		}
+
 		for property, value := range rule.Paint {
 			base, ok := fallback[property]
+
 			if !ok {
 				return nil, fmt.Errorf("conditional paint rule %d: property %q has no fallback", i+1, property)
 			}
+
 			if !reflect.DeepEqual(value, base) {
 				changed[property] = true
 			}
@@ -62,18 +53,23 @@ func ConditionalPaint(field string, rules []ConditionalRule, fallback Paint) (Pa
 
 	paint := make(Paint, len(fallback))
 	maps.Copy(paint, fallback)
+
 	for property := range changed {
 		expression := make([]any, 1, 2*len(rules)+2)
 		expression[0] = "case"
+
 		for i, rule := range rules {
 			value, ok := rule.Paint[property]
 			if !ok {
 				value = fallback[property]
 			}
+
 			expression = append(expression, conditions[i], conditionalLiteral(value))
 		}
+
 		paint[property] = append(expression, conditionalLiteral(fallback[property]))
 	}
+
 	return paint, nil
 }
 
@@ -88,6 +84,7 @@ func conditionalComparison(field, operator string, value any) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	if operator != "==" && operator != "!=" && category.kind != categoryNumber {
 		return nil, fmt.Errorf("operator %q requires a numeric comparison value", operator)
 	}
@@ -110,10 +107,12 @@ func conditionalValue(value any) (CategoryValue, error) {
 		if _, err := json.Marshal(number); err != nil {
 			return CategoryValue{}, fmt.Errorf("invalid numeric comparison value: %w", err)
 		}
+
 		f, err := strconv.ParseFloat(string(number), 64)
 		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
 			return CategoryValue{}, fmt.Errorf("comparison value must be a finite number")
 		}
+
 		return CategoryValue{kind: categoryNumber, value: string(number)}, nil
 	}
 	category, err := NewCategoryValue(value)
@@ -123,6 +122,7 @@ func conditionalValue(value any) (CategoryValue, error) {
 	if category.kind == categoryMissing {
 		return CategoryValue{}, fmt.Errorf("comparison value must be a number, string, or boolean")
 	}
+
 	return category, nil
 }
 
@@ -133,5 +133,6 @@ func conditionalLiteral(value any) any {
 	if len(raw) > 0 && (raw[0] == '[' || raw[0] == '{') {
 		return []any{"literal", value}
 	}
+
 	return value
 }
