@@ -3,6 +3,7 @@ package tui
 import "charm.land/bubbles/v2/key"
 
 type keyMap struct {
+	OmitLayer         key.Binding
 	PreviewSample     key.Binding
 	WriteFiles        key.Binding
 	RemoveLayer       key.Binding
@@ -22,6 +23,7 @@ type keyMap struct {
 
 func newKeyMap() keyMap {
 	return keyMap{
+		OmitLayer:     key.NewBinding(key.WithKeys("x", "X"), key.WithHelp("X", "Omit / restore layer")),
 		PreviewSample: key.NewBinding(key.WithKeys("d", "D"), key.WithHelp("D", "Sample / real preview")),
 		WriteFiles:    key.NewBinding(key.WithKeys("w", "W"), key.WithHelp("W", "Write files")),
 		RemoveLayer:   key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "Remove layer")),
@@ -70,6 +72,7 @@ func newKeyMap() keyMap {
 }
 
 type detailKeyMap struct {
+	OmitLayer         key.Binding
 	PreviewSample     key.Binding
 	WriteFiles        key.Binding
 	RemoveLayer       key.Binding
@@ -91,9 +94,10 @@ type detailKeyMap struct {
 
 func newDetailKeyMap() detailKeyMap {
 	return detailKeyMap{
+		OmitLayer:     key.NewBinding(key.WithKeys("x", "X"), key.WithHelp("X", "Omit / restore layer in Layers; omitted layers show ⊗ and are excluded from all outputs, retaining their styling drafts")),
 		PreviewSample: key.NewBinding(key.WithKeys("d", "D"), key.WithHelp("D", "Toggle compact sample geometry or real geometry in Preview for all features; inactive while editing an input")),
 		ColorPicker:   key.NewBinding(key.WithKeys("enter", "esc", "tab", "shift+tab", "left", "right"), key.WithHelp("Color picker", "Tab/Shift+Tab focuses Square, H, S, L, Hex, R, G, B in order or reverse. Left/Right adjusts a focused slider or RGB value without Enter. Enter activates square/slider adjustment or Hex/RGB text editing; Escape leaves it. Edits apply live. Click and drag to pick colors; alpha is always 255.")),
-		WriteFiles:    key.NewBinding(key.WithKeys("w", "W"), key.WithHelp("W", "Write enabled outputs to -o when all layers are green; inactive while editing an input")),
+		WriteFiles:    key.NewBinding(key.WithKeys("w", "W"), key.WithHelp("W", "Write enabled outputs to -o when at least one layer is included and all included layers are green; inactive while editing an input")),
 		RemoveLayer:   key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace", "Remove the highlighted style layer in the style-layer selection list")),
 		RemoveOption:  key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace", "Remove the highlighted included option in the styling editor, including the filtered list")),
 		ControlFocus:  key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("Tab / Shift+Tab", "Focus the next or previous input, adjustment button, or action in Controls")),
@@ -154,6 +158,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 
 func (k detailKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{
+		k.OmitLayer,
 		k.PreviewSample,
 		k.WriteFiles,
 		k.RemoveLayer,

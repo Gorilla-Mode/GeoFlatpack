@@ -83,6 +83,9 @@ func (m *Model) panel() string {
 	}
 
 	hints := m.keys.ShortHelp()[3:]
+	if scaffold && m.editor.Pane() == panel.LayerPane {
+		hints = append([]key.Binding{m.keys.LeftPane, m.keys.RightPane, m.keys.OmitLayer}, hints[2:]...)
+	}
 	selectKey := m.keys.Select
 	helpKey := m.keys.Help
 	if scaffold && m.editor.Pane() == panel.ControlsPane {
