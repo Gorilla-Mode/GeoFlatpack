@@ -42,6 +42,7 @@ type StyleSelection struct {
 	Omit          bool
 	CategoryField string
 	Styles        map[maplibre.StyleGroup][]maplibre.RenderLayerStyle
+	Conditional   *maplibre.ConditionalStyle
 }
 
 // Session owns converted datasets until Close. It is not safe for concurrent use.
@@ -193,6 +194,7 @@ func (s *Session) Write(selections []StyleSelection) (err error) {
 				SourceID:      layer.SourceID,
 				CategoryField: selections[i].CategoryField,
 				Styles:        selections[i].Styles,
+				Conditional:   selections[i].Conditional,
 			}
 			if opts.WriteFGB {
 				outputLayers[i], err = maplibre.PrepareVertexCompanions(&input)

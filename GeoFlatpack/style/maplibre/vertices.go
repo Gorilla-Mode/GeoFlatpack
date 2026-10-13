@@ -16,8 +16,16 @@ func PrepareVertexCompanions(input *LayerStyle) (*fgb.Fgb, error) {
 	}
 
 	selected := make(map[int]fgb.VertexKind)
+	field := input.CategoryField
+	if input.Conditional != nil {
+		if err := input.Conditional.Validate(); err != nil {
+			return nil, err
+		}
+		field = ""
+	}
+	
 	for i := range input.Data.Features {
-		group, eligible, err := vertexStyleGroup(&input.Data.Features[i], input.Data.Header.GeometryType(), input.CategoryField, i)
+		group, eligible, err := vertexStyleGroup(&input.Data.Features[i], input.Data.Header.GeometryType(), field, i)
 		if err != nil {
 			return nil, err
 		}
@@ -26,7 +34,15 @@ func PrepareVertexCompanions(input *LayerStyle) (*fgb.Fgb, error) {
 			continue
 		}
 
-		for _, layer := range input.Styles[group] {
+		stack := input.Styles[group]
+		if input.Conditional != nil {
+			group.RuleID, err = input.Conditional.Match(input.Data.Features[i].Properties)
+			if err != nil {
+				return nil, err
+			}
+			stack = input.Conditional.Stack(group)
+		}
+		for _, layer := range stack {
 			if layer.Type == RenderSymbol {
 				switch group.GeometryType {
 				case Line:
