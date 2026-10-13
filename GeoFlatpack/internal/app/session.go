@@ -37,8 +37,9 @@ type Layer struct {
 	Data       *fgb.Fgb
 }
 
-// StyleSelection contains the styling choices for one layer.
+// StyleSelection contains the omission and styling choices for one source layer.
 type StyleSelection struct {
+	Omit          bool
 	CategoryField string
 	Styles        map[maplibre.StyleGroup][]maplibre.RenderLayerStyle
 }
@@ -60,9 +61,12 @@ func Prepare(opts Options, out io.Writer) (_ *Session, err error) {
 	if out == nil {
 		out = io.Discard
 	}
-	if err := validate.Gml(opts.Input); err != nil {
+
+	Inputformat, err := validate.InputFormat(opts.Input)
+	if err != nil {
 		return nil, err
 	}
+
 	if err := validate.Format(validate.StyleFormat(opts.Format)); err != nil {
 		return nil, err
 	}
@@ -83,7 +87,12 @@ func Prepare(opts Options, out io.Writer) (_ *Session, err error) {
 		_, _ = fmt.Fprintln(out, "gfp: converting every GML layer to FlatGeobuf...")
 	}
 
-	files, err := convert.GmlToFgb(opts.Input, opts.ForceEPSG4326, opts.SkipFailures)
+	files, err := convert.VectorToFgb(convert.VectorGeometry{
+		InputPath:     opts.Input,
+		ForceEPSG4326: opts.ForceEPSG4326,
+		SkipFailures:  opts.SkipFailures,
+		Format:        Inputformat,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -146,16 +155,26 @@ func (s *Session) Close() error {
 	return err
 }
 
-// Write prepares companions and writes enabled outputs. When styling is enabled,
-// selections must contain one entry per layer in Layers order, including an
-// empty selection for each empty layer. Otherwise selections are ignored.
+// Write prepares companions and writes enabled outputs. Supplied selections must
+// contain one entry per source layer in Layers order. Omitted entries skip all
+// outputs and styling validation. Styling requires selections, including an empty
+// selection for each empty layer; FGB-only callers may omit selections entirely.
 func (s *Session) Write(selections []StyleSelection) (err error) {
 	if s.closed {
 		return fmt.Errorf("session is closed")
 	}
 	opts, out, output, files := s.options, s.diagnostics, s.output, s.files
-	if opts.WriteStyle && len(selections) != len(s.layers) {
+	if (opts.WriteStyle || selections != nil) && len(selections) != len(s.layers) {
 		return fmt.Errorf("expected one style selection per layer: got %d, want %d", len(selections), len(s.layers))
+	}
+	included := make([]int, 0, len(s.layers))
+	for i := range s.layers {
+		if len(selections) == 0 || !selections[i].Omit {
+			included = append(included, i)
+		}
+	}
+	if len(s.layers) > 0 && len(included) == 0 {
+		return fmt.Errorf("all layers are omitted; restore at least one layer before writing")
 	}
 	layers := make([]*fgb.Fgb, len(s.layers))
 	names := make([]string, len(s.layers))
@@ -166,22 +185,22 @@ func (s *Session) Write(selections []StyleSelection) (err error) {
 	outputLayers := append([]*fgb.Fgb(nil), layers...)
 	var styleJSON []byte
 	if opts.WriteStyle {
-		inputs := make([]maplibre.LayerStyle, len(layers))
-		for i, layer := range s.layers {
-			inputs[i] = maplibre.LayerStyle{
+		inputs := make([]maplibre.LayerStyle, 0, len(included))
+		for _, i := range included {
+			layer := s.layers[i]
+			input := maplibre.LayerStyle{
 				Data:          layer.Data,
 				SourceID:      layer.SourceID,
 				CategoryField: selections[i].CategoryField,
 				Styles:        selections[i].Styles,
 			}
-		}
-		if opts.WriteFGB {
-			for i := range inputs {
-				outputLayers[i], err = maplibre.PrepareVertexCompanions(&inputs[i])
+			if opts.WriteFGB {
+				outputLayers[i], err = maplibre.PrepareVertexCompanions(&input)
 				if err != nil {
 					return fmt.Errorf("layer %q companions: %w", names[i], err)
 				}
 			}
+			inputs = append(inputs, input)
 		}
 		mapStyle, err := maplibre.BuildMapLibreCollectionStyle(filepath.Base(output), inputs, s.icons)
 		if err != nil {
@@ -201,7 +220,8 @@ func (s *Session) Write(selections []StyleSelection) (err error) {
 	}
 
 	if opts.WriteFGB {
-		for i, file := range files {
+		for _, i := range included {
+			file := files[i]
 			var writeErr error
 			if outputLayers[i] != layers[i] {
 				writeErr = fgb.WriteFgb(outputLayers[i], paths[i])

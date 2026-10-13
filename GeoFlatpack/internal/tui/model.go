@@ -206,8 +206,10 @@ func (m *Model) startWrite() tea.Cmd {
 	var err error
 	if !m.Options.WriteFGB && !m.Options.WriteStyle {
 		err = fmt.Errorf("No outputs enabled")
+	} else if m.workflow.Session() != nil && len(m.workflow.Session().Layers()) > 0 && m.editor.IncludedCount() == 0 {
+		err = fmt.Errorf("All layers are omitted; restore at least one layer before writing")
 	} else if m.workflow.Session() == nil || !m.editor.Ready() {
-		err = fmt.Errorf("Complete all layers before writing")
+		err = fmt.Errorf("Complete all included layers before writing")
 	}
 
 	var selections []app.StyleSelection

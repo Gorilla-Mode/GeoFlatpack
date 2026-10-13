@@ -5,11 +5,27 @@ import (
 	"path/filepath"
 )
 
-func Gml(file string) error {
+type VectorFormat int
+
+const (
+	NOFORMAT VectorFormat = iota
+	FGB
+	FGDB
+)
+
+func InputFormat(file string) (VectorFormat, error) {
 	extension := filepath.Ext(file)
-	if extension != ".gml" {
-		return fmt.Errorf("input file must have a .gml extension")
+
+	Format := NOFORMAT
+	if extension == ".gml" {
+		Format = FGB
+	} else if extension == ".gdb" {
+		Format = FGDB
 	}
 
-	return nil
+	if extension != ".gml" && extension != ".gdb" {
+		return Format, fmt.Errorf("input file has an invalid extension: %s", extension)
+	}
+
+	return Format, nil
 }

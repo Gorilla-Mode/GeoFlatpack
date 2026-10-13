@@ -86,6 +86,10 @@ func (m *Editor) Input(msg tea.Msg) tea.Cmd {
 
 		switch m.activePane {
 		case panel.LayerPane:
+			if (k.String() == "x" || k.String() == "X") && len(m.layers) > 0 {
+				m.layers[m.selectedLayer].Omitted = !m.layers[m.selectedLayer].Omitted
+			}
+
 			if delta != 0 {
 				m.selectedLayer = panel.MoveListSelection(m.selectedLayer, delta, len(m.layers))
 			}

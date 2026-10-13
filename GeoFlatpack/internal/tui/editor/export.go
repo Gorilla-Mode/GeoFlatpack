@@ -8,17 +8,28 @@ import (
 )
 
 func (m *Editor) Ready() bool {
-	if !m.loaded || len(m.layers) == 0 {
+	if !m.loaded || m.IncludedCount() == 0 {
 		return false
 	}
 
 	for _, layer := range m.layers {
-		if layer.Status != panel.ListComplete {
+		if !layer.Omitted && layer.Status != panel.ListComplete {
 			return false
 		}
 	}
 
 	return true
+}
+
+// IncludedCount reports how many source layers will be written.
+func (m *Editor) IncludedCount() int {
+	count := 0
+	for _, layer := range m.layers {
+		if !layer.Omitted {
+			count++
+		}
+	}
+	return count
 }
 
 // Snapshot source/category/group order independently of visible cursors. Stack
@@ -30,6 +41,11 @@ func (m *Editor) Selections() ([]app.StyleSelection, error) {
 
 	selections := make([]app.StyleSelection, len(m.categories))
 	for i, categories := range m.categories {
+		if m.layers[i].Omitted {
+			selections[i] = app.StyleSelection{Omit: true}
+			continue
+		}
+
 		if categories.active < 0 || categories.active >= len(categories.features) || categories.active >= len(categories.fields) {
 			return nil, fmt.Errorf("layer %q has no active category", m.layers[i].Name)
 		}

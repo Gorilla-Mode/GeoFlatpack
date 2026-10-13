@@ -23,6 +23,7 @@ type ListItem struct {
 	Name     string
 	Detail   string
 	Status   ListStatus
+	Omitted  bool
 	Children []string
 }
 
@@ -186,6 +187,9 @@ func renderListItem(opts ListOptions, item ListItem, selected bool) string {
 		indicator, indicatorStyle = "●", opts.Styles.Incomplete
 	case ListComplete, ListActive:
 		indicator, indicatorStyle = "●", opts.Styles.Complete
+	}
+	if item.Omitted {
+		indicator, indicatorStyle = "⊗", opts.Styles.Unopened
 	}
 
 	// Embedded ANSI resets must not override the item's colors or fill.
