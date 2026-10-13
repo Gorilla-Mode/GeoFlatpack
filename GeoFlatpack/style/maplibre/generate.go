@@ -233,8 +233,8 @@ func (input LayerStyle) StyleGroups() ([]StyleGroup, error) {
 
 	var groups []StyleGroup
 	for _, geometry := range geometries {
-		for _, rule := range input.Conditional.Rules {
-			groups = append(groups, StyleGroup{GeometryType: geometry.GeometryType, RuleID: rule.ID})
+		for _, id := range input.Conditional.targetIDs() {
+			groups = append(groups, StyleGroup{GeometryType: geometry.GeometryType, RuleID: id})
 		}
 		if _, included := input.Conditional.Otherwise[geometry.GeometryType]; included {
 			groups = append(groups, geometry)

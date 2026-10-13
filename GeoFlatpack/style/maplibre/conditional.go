@@ -13,23 +13,34 @@ import (
 type ConditionalRule struct {
 	ID       string
 	Operator string
-	Value    any
+	Value    any // nil explicitly compares with Missing value (absent or null).
 	Paint    Paint
 	Styles   map[GeometryType][]RenderLayerStyle
 }
 
-// ConditionalStyle replaces exact category grouping. An absent Otherwise
-// geometry omits that fallback; rules remain available even without matches.
+// ConditionalStyle replaces exact category grouping. Use Field/Rules for a
+// single field, or Fields/Combinations for a collection, never both. An absent
+// Otherwise geometry omits the shared fallback; empty matches remain groups.
 type ConditionalStyle struct {
-	Field     string
-	Rules     []ConditionalRule
-	Otherwise map[GeometryType][]RenderLayerStyle
+	Field        string
+	Rules        []ConditionalRule
+	Fields       []ConditionalField
+	Combinations []ConditionalCombination
+	Otherwise    map[GeometryType][]RenderLayerStyle
 }
 
 // DefinitionKey identifies matching semantics independently of style edits.
 func (c *ConditionalStyle) DefinitionKey() string {
 	if c == nil {
 		return ""
+	}
+	if len(c.Fields) > 0 {
+		combinations := make([]ConditionalCombination, len(c.Combinations))
+		for i, combination := range c.Combinations {
+			combinations[i] = ConditionalCombination{ID: combination.ID, RuleIDs: combination.RuleIDs}
+		}
+		raw, _ := json.Marshal([]any{c.Fields, combinations})
+		return string(raw)
 	}
 
 	rules := make([]ConditionalRule, len(c.Rules))
@@ -55,6 +66,12 @@ func ValidateComparison(field, operator string, value any) error {
 }
 
 func (c *ConditionalStyle) Validate() error {
+	if len(c.Fields) > 0 {
+		return c.validateCollection()
+	}
+	if len(c.Combinations) > 0 {
+		return fmt.Errorf("conditional combinations require participating fields")
+	}
 	if strings.TrimSpace(c.Field) == "" {
 		return fmt.Errorf("conditional style: empty field name")
 	}
@@ -74,57 +91,27 @@ func (c *ConditionalStyle) Validate() error {
 	return nil
 }
 
-// Match returns the first matching rule's ID, or the empty Otherwise ID.
+// Match returns a rule or combination ID, or the empty shared Otherwise ID.
 // Convert numbers to double precision, as MapLibre's expression runtime does.
 func (c *ConditionalStyle) Match(properties map[string]any) (string, error) {
-	if err := c.Validate(); err != nil {
+	match, err := c.Matcher()
+	if err != nil {
 		return "", err
 	}
-
-	actual, err := conditionalValue(properties[c.Field])
-	if err != nil {
-		return "", nil // Missing, null and incompatible values use Otherwise.
-	}
-
-	for _, rule := range c.Rules {
-		expected, _ := conditionalValue(rule.Value)
-		if actual.kind != expected.kind {
-			continue
-		}
-
-		equal, less, greater := actual.value == expected.value, false, false
-		if actual.kind == categoryNumber {
-			a, _ := strconv.ParseFloat(actual.value, 64)
-			b, _ := strconv.ParseFloat(expected.value, 64)
-			equal, less, greater = a == b, a < b, a > b
-		}
-
-		matches := false
-		switch rule.Operator {
-		case "==":
-			matches = equal
-		case "!=":
-			matches = !equal
-		case ">":
-			matches = greater
-		case ">=":
-			matches = greater || equal
-		case "<":
-			matches = less
-		case "<=":
-			matches = less || equal
-		}
-		if matches {
-			return rule.ID, nil
-		}
-	}
-
-	return "", nil
+	return match(properties), nil
 }
 
 func (c *ConditionalStyle) Stack(group StyleGroup) []RenderLayerStyle {
 	if group.RuleID == "" {
 		return c.Otherwise[group.GeometryType]
+	}
+	if len(c.Fields) > 0 {
+		for _, combination := range c.Combinations {
+			if combination.ID == group.RuleID {
+				return combination.Styles[group.GeometryType]
+			}
+		}
+		return nil
 	}
 
 	for _, rule := range c.Rules {
@@ -141,6 +128,9 @@ func (c *ConditionalStyle) Stack(group StyleGroup) []RenderLayerStyle {
 func (c *ConditionalStyle) Predicate(id string) ([]any, error) {
 	if err := c.Validate(); err != nil {
 		return nil, err
+	}
+	if len(c.Fields) > 0 {
+		return c.collectionPredicate(id)
 	}
 
 	filter := []any{"all"}
@@ -234,6 +224,9 @@ func conditionalComparison(field, operator string, value any) ([]any, error) {
 
 	typ := string(category.kind)
 	get := []any{"get", field}
+	if category.kind == categoryMissing {
+		return []any{operator, get, nil}, nil
+	}
 	// Use a lazy case rather than relying on a failed type assertion, which would
 	// make MapLibre fall back to the property's default instead of our fallback.
 	return []any{
@@ -262,10 +255,6 @@ func conditionalValue(value any) (CategoryValue, error) {
 	if err != nil {
 		return CategoryValue{}, fmt.Errorf("invalid comparison value: %w", err)
 	}
-	if category.kind == categoryMissing {
-		return CategoryValue{}, fmt.Errorf("comparison value must be a number, string, or boolean")
-	}
-
 	return category, nil
 }
 

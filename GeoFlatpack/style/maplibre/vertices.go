@@ -17,13 +17,16 @@ func PrepareVertexCompanions(input *LayerStyle) (*fgb.Fgb, error) {
 
 	selected := make(map[int]fgb.VertexKind)
 	field := input.CategoryField
+	var match func(map[string]any) string
 	if input.Conditional != nil {
-		if err := input.Conditional.Validate(); err != nil {
+		var err error
+		match, err = input.Conditional.Matcher()
+		if err != nil {
 			return nil, err
 		}
 		field = ""
 	}
-	
+
 	for i := range input.Data.Features {
 		group, eligible, err := vertexStyleGroup(&input.Data.Features[i], input.Data.Header.GeometryType(), field, i)
 		if err != nil {
@@ -36,10 +39,7 @@ func PrepareVertexCompanions(input *LayerStyle) (*fgb.Fgb, error) {
 
 		stack := input.Styles[group]
 		if input.Conditional != nil {
-			group.RuleID, err = input.Conditional.Match(input.Data.Features[i].Properties)
-			if err != nil {
-				return nil, err
-			}
+			group.RuleID = match(input.Data.Features[i].Properties)
 			stack = input.Conditional.Stack(group)
 		}
 		for _, layer := range stack {
@@ -59,6 +59,30 @@ func PrepareVertexCompanions(input *LayerStyle) (*fgb.Fgb, error) {
 	data, marker, err := fgb.WithVertexCompanions(input.Data, selected)
 	if err != nil {
 		return nil, err
+	}
+
+	if marker == "" && input.Conditional != nil {
+		groups, err := input.StyleGroups()
+		if err != nil {
+			return nil, err
+		}
+		for _, group := range groups {
+			if group.GeometryType == Point {
+				continue
+			}
+			for _, layer := range input.Conditional.Stack(group) {
+				if layer.Type == RenderSymbol {
+					marker, err = fgb.VertexMarkerName(input.Data)
+					if err != nil {
+						return nil, err
+					}
+					break
+				}
+			}
+			if marker != "" {
+				break
+			}
+		}
 	}
 
 	input.VertexMarker = marker
