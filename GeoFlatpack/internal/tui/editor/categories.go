@@ -17,6 +17,8 @@ type categoryState struct {
 	firstVisible int
 	active       int
 	emptyText    string
+	conditional  []*conditionState
+	markedOnly   bool
 }
 
 func newCategoryState(data *fgb.Fgb) categoryState {
@@ -66,6 +68,7 @@ func newCategoryState(data *fgb.Fgb) categoryState {
 		}
 
 		state.add(field.Name, field.Name, field.Distinct, field.Examples, groups)
+		state.conditional[len(state.conditional)-1].valueType = inferConditionType(field.Types)
 	}
 
 	return state
@@ -79,7 +82,50 @@ func (s *categoryState) add(field, name string, count int, examples []string, gr
 
 	s.fields = append(s.fields, field)
 	s.features = append(s.features, newFeatureState(groups))
+	s.conditional = append(s.conditional, &conditionState{geometries: append([]maplibre.StyleGroup(nil), s.features[0].groups...), valueType: "number"})
 	s.items = append(s.items, panel.ListItem{Name: name, Detail: detail, Children: append([]string(nil), examples[:min(3, len(examples))]...)})
+}
+
+func (s *categoryState) visibleIndices() []int {
+	var indices []int
+	for i, item := range s.items {
+		if !s.markedOnly || item.Conditional {
+			indices = append(indices, i)
+		}
+	}
+	return indices
+}
+
+func (s *categoryState) visibleItems() ([]panel.ListItem, int) {
+	var items []panel.ListItem
+	selected := 0
+	for _, index := range s.visibleIndices() {
+		if index == s.selected {
+			selected = len(items)
+		}
+		items = append(items, s.items[index])
+	}
+	return items, selected
+}
+
+func (s *categoryState) move(delta int) {
+	indices := s.visibleIndices()
+	if len(indices) == 0 {
+		return
+	}
+	_, selected := s.visibleItems()
+	s.selected = indices[panel.MoveListSelection(selected, delta, len(indices))]
+}
+
+func (s *categoryState) toggleFilter() {
+	s.markedOnly = !s.markedOnly
+	s.firstVisible = 0
+	if s.markedOnly && !s.items[s.selected].Conditional {
+		indices := s.visibleIndices()
+		if len(indices) > 0 {
+			s.selected = indices[0]
+		}
+	}
 }
 
 func (m *Editor) currentCategories() *categoryState {

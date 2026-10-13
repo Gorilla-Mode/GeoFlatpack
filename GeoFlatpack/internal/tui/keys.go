@@ -72,6 +72,9 @@ func newKeyMap() keyMap {
 }
 
 type detailKeyMap struct {
+	Conditional       key.Binding
+	ConditionBack     key.Binding
+	MoveCondition     key.Binding
 	OmitLayer         key.Binding
 	PreviewSample     key.Binding
 	WriteFiles        key.Binding
@@ -94,6 +97,9 @@ type detailKeyMap struct {
 
 func newDetailKeyMap() detailKeyMap {
 	return detailKeyMap{
+		Conditional:   key.NewBinding(key.WithKeys("c"), key.WithHelp("C / H in Categories", "C marks or unmarks the highlighted field for conditional styling; H shows all fields or marked fields only. No category field cannot be marked. Enter in all fields activates the category and opens Features; Enter in marked fields opens its condition editor in Controls.")),
+		ConditionBack: key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace in condition Controls", "Return to Categories outside text editing; delete text while editing. Enter edits or commits a value; Escape cancels the edit.")),
+		MoveCondition: key.NewBinding(key.WithKeys("ctrl+up", "ctrl+down"), key.WithHelp("Control+Up / Control+Down", "Move a condition and its styling together. Conditions match in order; the first match wins. Numbers, strings and booleans remain distinct; ordering requires numbers. Missing, null and incompatible values use Otherwise. X in Features omits/restores Otherwise while retaining its draft.")),
 		OmitLayer:     key.NewBinding(key.WithKeys("x", "X"), key.WithHelp("X", "Omit / restore layer in Layers; omitted layers show ⊗ and are excluded from all outputs, retaining their styling drafts")),
 		PreviewSample: key.NewBinding(key.WithKeys("d", "D"), key.WithHelp("D", "Toggle compact sample geometry or real geometry in Preview for all features; inactive while editing an input")),
 		ColorPicker:   key.NewBinding(key.WithKeys("enter", "esc", "tab", "shift+tab", "left", "right"), key.WithHelp("Color picker", "Tab/Shift+Tab focuses Square, H, S, L, Hex, R, G, B in order or reverse. Left/Right adjusts a focused slider or RGB value without Enter. Enter activates square/slider adjustment or Hex/RGB text editing; Escape leaves it. Edits apply live. Click and drag to pick colors; alpha is always 255.")),
@@ -158,6 +164,9 @@ func (k keyMap) ShortHelp() []key.Binding {
 
 func (k detailKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{
+		k.Conditional,
+		k.ConditionBack,
+		k.MoveCondition,
 		k.OmitLayer,
 		k.PreviewSample,
 		k.WriteFiles,

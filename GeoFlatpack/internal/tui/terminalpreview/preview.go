@@ -55,9 +55,10 @@ type cachedPreview struct {
 }
 
 type representativeKey struct {
-	data  *fgb.Fgb
-	field string
-	group maplibre.StyleGroup
+	data       *fgb.Fgb
+	field      string
+	group      maplibre.StyleGroup
+	conditions string
 }
 
 type representativeChoice struct {
@@ -278,15 +279,22 @@ func (s *State) Request(target editor.Target, dimensions Dimensions) (preview.Re
 
 	group := *target.Group
 	stack := request.Input.Styles[group]
+	if request.Input.Conditional != nil {
+		stack = request.Input.Conditional.Stack(group)
+	}
 	layer := request.Input
-	key := representativeKey{data: layer.Data, field: request.Input.CategoryField, group: group}
+	key := representativeKey{data: layer.Data, field: request.Input.CategoryField, group: group, conditions: layer.Conditional.DefinitionKey()}
 	if s.representatives == nil {
 		s.representatives = make(map[representativeKey]representativeChoice)
 	}
 
 	choice, cached := s.representatives[key]
 	if !cached {
-		choice.index, choice.err = preview.RepresentativeIndex(layer.Data, request.Input.CategoryField, group)
+		if layer.Conditional != nil {
+			choice.index, choice.err = preview.ConditionalRepresentativeIndex(layer.Data, layer.Conditional, group)
+		} else {
+			choice.index, choice.err = preview.RepresentativeIndex(layer.Data, request.Input.CategoryField, group)
+		}
 		s.representatives[key] = choice
 	}
 
@@ -300,8 +308,8 @@ func (s *State) Request(target editor.Target, dimensions Dimensions) (preview.Re
 	}
 
 	request.Width, request.Height = min(4096, r.Width*s.cellWidth), min(4096, r.Height*s.cellHeight)
-	targetKey := fmt.Sprintf("%d/%d/%d/%d/%t", target.Layer, target.Category, target.Feature, choice.index, s.sample)
-	raw, err := json.Marshal([]any{targetKey, request.Width, request.Height, r.Width, r.Height, string(group.GeometryType), group.Category.String(), group.Category.FilterValue(), stack})
+	targetKey := fmt.Sprintf("%d/%d/%d/%s/%s/%d/%t", target.Layer, target.Category, target.Feature, group.RuleID, group.GeometryType, choice.index, s.sample)
+	raw, err := json.Marshal([]any{targetKey, request.Width, request.Height, r.Width, r.Height, string(group.GeometryType), group.Category.String(), group.Category.FilterValue(), stack, key.conditions})
 	if err != nil {
 		return request, "", "", err
 	}

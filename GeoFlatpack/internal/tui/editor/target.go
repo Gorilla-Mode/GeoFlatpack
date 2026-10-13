@@ -51,6 +51,14 @@ func (m *Editor) PreviewTarget() (Target, error) {
 	group := features.groups[groupIndex]
 	request.Group = &group
 	request.Layer, request.Category, request.Feature = m.selectedLayer, categoryIndex, groupIndex
+	if categories.items[categoryIndex].Conditional {
+		var err error
+		request.Input.Conditional, err = categories.conditional[categoryIndex].snapshot(categories.fields[categoryIndex], true)
+		if features.items[groupIndex].Omitted {
+			return request, fmt.Errorf("Otherwise is omitted")
+		}
+		return request, err
+	}
 	var stack []maplibre.RenderLayerStyle
 	for _, layer := range features.styling[groupIndex].layers {
 		if layer.style.Type == maplibre.RenderSymbol && layer.style.IconName == "" {

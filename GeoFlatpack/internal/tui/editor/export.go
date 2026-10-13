@@ -50,6 +50,14 @@ func (m *Editor) Selections() ([]app.StyleSelection, error) {
 			return nil, fmt.Errorf("layer %q has no active category", m.layers[i].Name)
 		}
 
+		if categories.items[categories.active].Conditional {
+			conditional, err := categories.conditional[categories.active].snapshot(categories.fields[categories.active], false)
+			if err != nil {
+				return nil, fmt.Errorf("layer %q: %w", m.layers[i].Name, err)
+			}
+			selections[i] = app.StyleSelection{Conditional: conditional}
+			continue
+		}
 		features := categories.features[categories.active]
 		if len(features.groups) != len(features.styling) {
 			return nil, fmt.Errorf("layer %q has incomplete styling groups", m.layers[i].Name)

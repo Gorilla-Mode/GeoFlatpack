@@ -20,23 +20,25 @@ const (
 
 // ListItem supplies presentation data for a layer, category, or feature option.
 type ListItem struct {
-	Name     string
-	Detail   string
-	Status   ListStatus
-	Omitted  bool
-	Children []string
+	Name        string
+	Detail      string
+	Status      ListStatus
+	Omitted     bool
+	Conditional bool
+	Children    []string
 }
 
 // ListStyles separates persistent selection and readiness from pane focus.
 type ListStyles struct {
-	Item         lipgloss.Style
-	SelectedItem lipgloss.Style
-	Name         lipgloss.Style
-	SelectedName lipgloss.Style
-	Detail       lipgloss.Style
-	Unopened     lipgloss.Style
-	Incomplete   lipgloss.Style
-	Complete     lipgloss.Style
+	Item            lipgloss.Style
+	SelectedItem    lipgloss.Style
+	Name            lipgloss.Style
+	SelectedName    lipgloss.Style
+	ConditionalName lipgloss.Style
+	Detail          lipgloss.Style
+	Unopened        lipgloss.Style
+	Incomplete      lipgloss.Style
+	Complete        lipgloss.Style
 }
 
 // ListOptions describes the available content area and the list's visible state.
@@ -178,6 +180,9 @@ func renderListItem(opts ListOptions, item ListItem, selected bool) string {
 	}
 
 	background := fill.GetBackground()
+	if item.Conditional {
+		name = opts.Styles.ConditionalName
+	}
 	name = name.Bold(selected).Background(background).Inline(true)
 	indicator, indicatorStyle := "○", opts.Styles.Unopened
 	switch item.Status {

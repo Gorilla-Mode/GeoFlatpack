@@ -18,6 +18,8 @@ type Editor struct {
 	categories                       []categoryState
 	stylingCatalog                   stylingCatalog
 	selectedLayer, firstVisibleLayer int
+	conditionEditor                  *conditionState
+	conditionField                   string
 }
 
 func New() *Editor {
@@ -28,6 +30,7 @@ func (m *Editor) Load(layers []app.Layer, icons map[string]svg.Svg, loaded bool)
 	m.sources, m.icons, m.loaded = layers, icons, loaded
 	m.layers = layerItems(layers)
 	m.categories = nil
+	m.conditionEditor = nil
 	for _, layer := range layers {
 		m.categories = append(m.categories, newCategoryState(layer.Data))
 	}
@@ -44,6 +47,9 @@ func (m *Editor) Pane() panel.Pane { return m.activePane }
 func (m *Editor) Focus(pane panel.Pane) {
 	m.StopDragging()
 	m.activePane = pane
+	if pane != panel.ControlsPane {
+		m.conditionEditor = nil
+	}
 }
 
 func (m *Editor) Open() {
@@ -69,7 +75,11 @@ func (m *Editor) Input(msg tea.Msg) tea.Cmd {
 			return nil
 		case "esc":
 			if m.activePane == panel.ControlsPane && !m.Editing() {
-				m.Focus(panel.FeatureStylingPane)
+				if m.conditionEditor != nil {
+					m.Focus(panel.CategoryPane)
+				} else {
+					m.Focus(panel.FeatureStylingPane)
+				}
 
 				return nil
 			}
@@ -104,10 +114,23 @@ func (m *Editor) Input(msg tea.Msg) tea.Cmd {
 		case panel.CategoryPane:
 			if c := m.currentCategories(); c != nil {
 				if delta != 0 {
-					c.selected = panel.MoveListSelection(c.selected, delta, len(c.items))
+					c.move(delta)
+				}
+				if (k.String() == "c" || k.String() == "C") && len(c.visibleIndices()) > 0 && c.fields[c.selected] != "" {
+					c.items[c.selected].Conditional = !c.items[c.selected].Conditional
+					c.conditional[c.selected].rebuild(c.fields[c.selected])
+					c.move(0)
+				}
+				if (k.String() == "h" || k.String() == "H") && len(c.items) > 0 {
+					c.toggleFilter()
 				}
 
-				if k.String() == "enter" && len(c.items) > 0 {
+				if k.String() == "enter" && len(c.visibleIndices()) > 0 {
+					if c.markedOnly {
+						m.conditionEditor, m.conditionField = c.conditional[c.selected], c.fields[c.selected]
+						m.activePane = panel.ControlsPane
+						return nil
+					}
 					c.activate()
 					m.layers[m.selectedLayer].Status = panel.ListIncomplete
 					m.activePane = panel.FeaturesPane
@@ -118,6 +141,9 @@ func (m *Editor) Input(msg tea.Msg) tea.Cmd {
 				if delta != 0 {
 					f.selected = panel.MoveListSelection(f.selected, delta, len(f.items))
 				}
+				if (k.String() == "x" || k.String() == "X") && len(f.items) > 0 && m.currentCategories().items[m.currentCategories().active].Conditional && f.groups[f.selected].RuleID == "" {
+					f.items[f.selected].Omitted = !f.items[f.selected].Omitted
+				}
 
 				if k.String() == "enter" && len(f.items) > 0 {
 					f.choose()
@@ -127,9 +153,15 @@ func (m *Editor) Input(msg tea.Msg) tea.Cmd {
 		case panel.FeatureStylingPane:
 			m.stylingInput(k)
 		case panel.ControlsPane:
+			if m.conditionEditor != nil {
+				return m.conditionsInput(msg)
+			}
 			return m.controlsInput(msg)
 		}
 	} else if m.Editing() {
+		if m.conditionEditor != nil {
+			return m.conditionsInput(msg)
+		}
 		return m.controlsInput(msg)
 	}
 

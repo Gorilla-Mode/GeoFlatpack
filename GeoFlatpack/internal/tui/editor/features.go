@@ -33,7 +33,14 @@ func (m *Editor) currentFeatures() *featureState {
 		return nil
 	}
 
-	return &categories.features[categories.active]
+	return categories.featureDraft(categories.active)
+}
+
+func (s *categoryState) featureDraft(index int) *featureState {
+	if s.items[index].Conditional {
+		return &s.conditional[index].features
+	}
+	return &s.features[index]
 }
 
 func (s *featureState) choose() {
@@ -58,7 +65,7 @@ func (s *featureState) RefreshReadiness() bool {
 		}
 
 		s.items[i].Status = status
-		complete = complete && status == panel.ListComplete
+		complete = complete && (s.items[i].Omitted || status == panel.ListComplete)
 	}
 
 	return complete
@@ -70,6 +77,10 @@ func (m *Editor) RefreshReadiness() {
 		complete := false
 		for j := range categories.features {
 			ready := categories.features[j].RefreshReadiness()
+			if categories.items[j].Conditional {
+				condition := categories.conditional[j]
+				ready = condition.features.RefreshReadiness() && condition.valid(categories.fields[j])
+			}
 			if j == categories.active {
 				complete = ready
 			}

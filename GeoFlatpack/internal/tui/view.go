@@ -86,7 +86,19 @@ func (m *Model) panel() string {
 	if scaffold && m.editor.Pane() == panel.LayerPane {
 		hints = append([]key.Binding{m.keys.LeftPane, m.keys.RightPane, m.keys.OmitLayer}, hints[2:]...)
 	}
+	if scaffold && m.editor.Pane() == panel.CategoryPane {
+		hints = append([]key.Binding{
+			key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "Conditional mode")),
+			key.NewBinding(key.WithKeys("h"), key.WithHelp("h", "All / marked fields")),
+		}, hints...)
+	}
+	if scaffold && m.editor.Pane() == panel.FeaturesPane && m.editor.Context().ConditionalCategory {
+		hints = append([]key.Binding{key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "Omit / restore Otherwise"))}, hints...)
+	}
 	selectKey := m.keys.Select
+	if scaffold && m.editor.Pane() == panel.CategoryPane && m.editor.Context().MarkedOnly {
+		selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Edit conditions"))
+	}
 	helpKey := m.keys.Help
 	if scaffold && m.editor.Pane() == panel.ControlsPane {
 		selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Edit / apply"))
@@ -94,6 +106,12 @@ func (m *Model) panel() string {
 			key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Back to editing")),
 			key.NewBinding(key.WithKeys("tab", "shift+tab"), key.WithHelp("Tab/⇧Tab", "Control")),
 		}, hints...)
+		if m.editor.Context().ConditionEditor && !m.editor.Editing() {
+			hints = append([]key.Binding{
+				key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "Categories")),
+				key.NewBinding(key.WithKeys("ctrl+up", "ctrl+down"), key.WithHelp("⌃↑/↓", "Move condition")),
+			}, hints...)
+		}
 		if m.editor.Editing() {
 			helpKey = key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Cancel"))
 			selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Save"))

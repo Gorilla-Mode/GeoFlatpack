@@ -55,6 +55,7 @@ type dataCache struct {
 	companions bool
 	marker     string
 	data       collection
+	conditions string
 }
 
 func prepare(ctx context.Context, request Request) (document, error) {
@@ -77,18 +78,29 @@ func prepareCached(ctx context.Context, request Request, cache *dataCache) (docu
 	if stack, configured := input.Styles[group]; configured {
 		styles[group] = stack
 	}
+	if input.Conditional != nil {
+		styles[group] = input.Conditional.Stack(group)
+		if len(styles[group]) == 0 {
+			return document{}, fmt.Errorf("Conditional styling is omitted or unfinished")
+		}
+	}
 	input.Styles = styles
 	companions := false
 	for _, layer := range styles[group] {
 		companions = companions || (layer.Type == maplibre.RenderSymbol && group.GeometryType != maplibre.Point)
 	}
-	matching := cache != nil && cache.source == input.Data && cache.field == input.CategoryField && cache.group == group
+	conditions := input.Conditional.DefinitionKey()
+	matching := cache != nil && cache.source == input.Data && cache.field == input.CategoryField && cache.group == group && cache.conditions == conditions
 	index := -1
 	if matching {
 		index = cache.index
 	} else {
 		var err error
-		index, err = RepresentativeIndex(input.Data, input.CategoryField, group)
+		if input.Conditional != nil {
+			index, err = ConditionalRepresentativeIndex(input.Data, input.Conditional, group)
+		} else {
+			index, err = RepresentativeIndex(input.Data, input.CategoryField, group)
+		}
 		if err != nil {
 			return document{}, err
 		}
@@ -113,7 +125,7 @@ func prepareCached(ctx context.Context, request Request, cache *dataCache) (docu
 			return document{}, err
 		}
 		if cache != nil {
-			*cache = dataCache{source: input.Data, field: input.CategoryField, group: group, index: index, companions: companions, marker: input.VertexMarker, data: data}
+			*cache = dataCache{source: input.Data, field: input.CategoryField, group: group, index: index, companions: companions, marker: input.VertexMarker, data: data, conditions: conditions}
 		}
 	}
 	if request.Sample {
@@ -122,6 +134,24 @@ func prepareCached(ctx context.Context, request Request, cache *dataCache) (docu
 		if err != nil {
 			return document{}, err
 		}
+	}
+	// Generate only the chosen stack, using the original feature and the same
+	// guarded effective predicate as export. Other groups need no preview layers.
+	var predicate []any
+	if input.Conditional != nil {
+		var err error
+		predicate, err = input.Conditional.Predicate(group.RuleID)
+		if err != nil {
+			return document{}, err
+		}
+		input.Conditional, input.CategoryField = nil, ""
+		input.Data, err = representativeData(input.Data, index)
+		if err != nil {
+			return document{}, err
+		}
+		stack := styles[group]
+		group.RuleID = ""
+		input.Styles = map[maplibre.StyleGroup][]maplibre.RenderLayerStyle{group: stack}
 	}
 	style, err := maplibre.BuildMapLibreCollectionStyle("preview", []maplibre.LayerStyle{input}, request.Icons)
 	if err != nil {
@@ -141,6 +171,9 @@ func prepareCached(ctx context.Context, request Request, cache *dataCache) (docu
 	layers := style.Layers[:0]
 	for _, layer := range style.Layers {
 		if prefix != "" && (layer.ID == prefix || strings.HasPrefix(layer.ID, prefix+"-")) {
+			if predicate != nil {
+				layer.Filter = []any{"all", layer.Filter, predicate}
+			}
 			layers = append(layers, layer)
 		}
 	}
