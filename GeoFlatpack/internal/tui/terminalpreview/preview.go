@@ -309,6 +309,9 @@ func (s *State) Request(target editor.Target, dimensions Dimensions) (preview.Re
 
 	request.Width, request.Height = min(4096, r.Width*s.cellWidth), min(4096, r.Height*s.cellHeight)
 	targetKey := fmt.Sprintf("%d/%d/%d/%s/%s/%d/%t", target.Layer, target.Category, target.Feature, group.RuleID, group.GeometryType, choice.index, s.sample)
+	if target.CollectionKey != "" {
+		targetKey = fmt.Sprintf("%d/%s/%s/%s/%d/%t", target.Layer, target.CollectionKey, group.RuleID, group.GeometryType, choice.index, s.sample)
+	}
 	raw, err := json.Marshal([]any{targetKey, request.Width, request.Height, r.Width, r.Height, string(group.GeometryType), group.Category.String(), group.Category.FilterValue(), stack, key.conditions})
 	if err != nil {
 		return request, "", "", err

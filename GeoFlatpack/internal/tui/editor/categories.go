@@ -10,15 +10,18 @@ import (
 // categoryState belongs to one source layer. Cursor and active choice are
 // independent: browsing a field never commits it as the styling category.
 type categoryState struct {
-	items        []panel.ListItem
-	fields       []string
-	features     []featureState
-	selected     int
-	firstVisible int
-	active       int
-	emptyText    string
-	conditional  []*conditionState
-	markedOnly   bool
+	items            []panel.ListItem
+	fields           []string
+	features         []featureState
+	selected         int
+	firstVisible     int
+	active           int
+	emptyText        string
+	conditional      []*conditionState
+	markedOnly       bool
+	collectionActive bool
+	collection       *collectionState
+	collections      map[string]*collectionState
 }
 
 func newCategoryState(data *fgb.Fgb) categoryState {
@@ -103,7 +106,15 @@ func (s *categoryState) visibleItems() ([]panel.ListItem, int) {
 		if index == s.selected {
 			selected = len(items)
 		}
-		items = append(items, s.items[index])
+		item := s.items[index]
+		if item.Conditional {
+			count := len(s.conditional[index].rules)
+			item.Detail = fmt.Sprintf("%d conditions", count)
+			if count == 1 {
+				item.Detail = "1 condition"
+			}
+		}
+		items = append(items, item)
 	}
 	return items, selected
 }
@@ -137,10 +148,10 @@ func (m *Editor) currentCategories() *categoryState {
 }
 
 func (s *categoryState) activate() {
-	if s.active >= 0 {
-		s.items[s.active].Status = panel.ListUnopened
-	}
-
 	s.active = s.selected
-	s.items[s.active].Status = panel.ListActive
+	s.collectionActive = s.items[s.selected].Conditional
+	if s.collectionActive {
+		s.rebuildCollection(s.selected)
+	}
+	s.refreshActiveIndicators()
 }

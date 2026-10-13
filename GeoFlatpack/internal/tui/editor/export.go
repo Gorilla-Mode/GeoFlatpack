@@ -50,8 +50,8 @@ func (m *Editor) Selections() ([]app.StyleSelection, error) {
 			return nil, fmt.Errorf("layer %q has no active category", m.layers[i].Name)
 		}
 
-		if categories.items[categories.active].Conditional {
-			conditional, err := categories.conditional[categories.active].snapshot(categories.fields[categories.active], false)
+		if categories.collectionActive {
+			conditional, err := categories.collectionSnapshot(false)
 			if err != nil {
 				return nil, fmt.Errorf("layer %q: %w", m.layers[i].Name, err)
 			}

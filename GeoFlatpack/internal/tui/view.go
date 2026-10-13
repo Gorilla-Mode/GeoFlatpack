@@ -88,7 +88,7 @@ func (m *Model) panel() string {
 	}
 	if scaffold && m.editor.Pane() == panel.CategoryPane {
 		hints = append([]key.Binding{
-			key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "Conditional mode")),
+			key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "Mark / unmark field")),
 			key.NewBinding(key.WithKeys("h"), key.WithHelp("h", "All / marked fields")),
 		}, hints...)
 	}
@@ -98,6 +98,8 @@ func (m *Model) panel() string {
 	selectKey := m.keys.Select
 	if scaffold && m.editor.Pane() == panel.CategoryPane && m.editor.Context().MarkedOnly {
 		selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Edit conditions"))
+	} else if scaffold && m.editor.Pane() == panel.CategoryPane && m.editor.Context().MarkedField {
+		selectKey = key.NewBinding(key.WithKeys("enter"), key.WithHelp("↵", "Style collection"))
 	}
 	helpKey := m.keys.Help
 	if scaffold && m.editor.Pane() == panel.ControlsPane {

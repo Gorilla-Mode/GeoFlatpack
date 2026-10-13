@@ -57,7 +57,7 @@ func categoryListOptions(opts ScaffoldOptions, interior paneSize) ListOptions {
 		Styles: opts.ListStyles, EmptyText: opts.CategoryEmptyText,
 	}
 
-	if opts.ActivePane != CategoryPane {
+	if opts.ActivePane != CategoryPane && !opts.EditingCategory {
 		// Outside this pane, show the committed choice rather than the cursor.
 		list.HideSelection = true
 		for i, item := range opts.Categories {
@@ -65,6 +65,11 @@ func categoryListOptions(opts ScaffoldOptions, interior paneSize) ListOptions {
 				list.Selected, list.HideSelection = i, false
 				break
 			}
+		}
+		// A conditional collection has several active fields. Keep the current
+		// participating field highlighted while its condition form is open.
+		if selected := opts.SelectedCategory; selected >= 0 && selected < len(opts.Categories) && opts.Categories[selected].Status == ListActive {
+			list.Selected, list.HideSelection = selected, false
 		}
 	}
 

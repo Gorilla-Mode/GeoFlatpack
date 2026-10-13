@@ -57,11 +57,14 @@ func inferConditionType(types []string) string {
 }
 
 func (r conditionRuleDraft) value(field string) (any, error) {
-	if !r.defined {
+	if !r.defined && r.valueType != "missing" {
 		return nil, fmt.Errorf("Enter a value")
 	}
 	var value any
 	switch r.valueType {
+	case "missing":
+		// Missing is an explicit choice; it needs no text value.
+		value = nil
 	case "string":
 		value = r.text
 	case "boolean":
@@ -95,7 +98,9 @@ func (c *conditionState) valid(field string) bool {
 
 func (c *conditionState) label(field string, r conditionRuleDraft) string {
 	text := r.text
-	if !r.defined {
+	if r.valueType == "missing" {
+		text = "Missing value"
+	} else if !r.defined {
 		text = "(unfinished)"
 	} else if r.valueType == "string" {
 		text = strconv.Quote(text)
@@ -112,7 +117,7 @@ func (c *conditionState) rebuild(field string) {
 	}
 	next := featureState{chosen: -1}
 	appendGroup := func(group maplibre.StyleGroup, label string) {
-		item := panel.ListItem{Name: label, Children: []string{"Condition: " + label, "Type: " + string(group.GeometryType)}}
+		item := panel.ListItem{Name: label, Children: []string{label, "Type: " + string(group.GeometryType)}}
 		style := stylingState{active: -1}
 		if index, ok := drafts[group]; ok {
 			style = old.styling[index]
@@ -156,24 +161,11 @@ func (c *conditionState) snapshot(field string, preview bool) (*maplibre.Conditi
 		if c.features.items[i].Omitted {
 			continue
 		}
-		state := c.features.styling[i]
-		if !preview && state.status() != panel.ListComplete {
-			return nil, fmt.Errorf("condition %s: incomplete styling", c.features.items[i].Name)
+		stack, err := snapshotStack(c.features.styling[i], group.GeometryType, preview)
+		if err != nil {
+			return nil, fmt.Errorf("condition %s: %w", c.features.items[i].Name, err)
 		}
-		var stack []maplibre.RenderLayerStyle
-		for _, layer := range state.layers {
-			if preview && layer.style.Type == maplibre.RenderSymbol && layer.style.IconName == "" {
-				continue
-			}
-			render, err := layer.renderSnapshot(preview)
-			if err != nil {
-				return nil, err
-			}
-			stack = append(stack, render)
-		}
-		if preview && len(stack) == 0 {
-			stack = []maplibre.RenderLayerStyle{{Type: maplibre.RenderTypes[group.GeometryType][0]}}
-		}
+
 		if group.RuleID == "" {
 			result.Otherwise[group.GeometryType] = stack
 		} else {
@@ -198,7 +190,7 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 				r.text, r.defined = c.input.Value(), true
 				c.editing = false
 				c.input.Blur()
-				c.rebuild(m.conditionField)
+				m.rebuildConditions()
 				return nil
 			}
 		}
@@ -209,7 +201,7 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 	if !isKey {
 		return nil
 	}
-	count := 3*len(c.rules) + 2
+	c.normalizeFocus()
 	switch key.String() {
 	case "backspace":
 		m.Focus(panel.CategoryPane)
@@ -218,14 +210,7 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 		if key.String() == "up" || key.String() == "shift+tab" {
 			delta = -1
 		}
-		if key.String() == "tab" || key.String() == "shift+tab" {
-			c.selected = (c.selected + delta + count) % count
-		} else {
-			c.selected = panel.MoveListSelection(c.selected, delta, count)
-		}
-		if c.selected < len(c.rules)*3 {
-			c.ruleIndex = c.selected / 3
-		}
+		c.move(delta, key.String() == "tab" || key.String() == "shift+tab")
 	case "ctrl+up", "ctrl+down":
 		if c.selected >= len(c.rules)*3 {
 			return nil
@@ -240,7 +225,7 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 			c.rules[from], c.rules[to] = c.rules[to], c.rules[from]
 			c.selected += delta * 3
 			c.ruleIndex = to
-			c.rebuild(m.conditionField)
+			m.rebuildConditions()
 		}
 	case "enter", "left", "right":
 		if c.selected >= len(c.rules)*3 {
@@ -258,7 +243,7 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 				c.ruleIndex = max(0, index-1)
 				c.selected = min(c.selected, len(c.rules)*3)
 			}
-			c.rebuild(m.conditionField)
+			m.rebuildConditions()
 			return nil
 		}
 		r := &c.rules[c.selected/3]
@@ -280,9 +265,9 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 		case 0:
 			cycle(&r.operator, []string{"==", "!=", ">", ">=", "<", "<="})
 		case 1:
-			cycle(&r.valueType, []string{"number", "string", "boolean"})
+			cycle(&r.valueType, []string{"number", "string", "boolean", "missing"})
 		case 2:
-			if key.String() != "enter" {
+			if key.String() != "enter" || r.valueType == "missing" {
 				return nil
 			}
 			c.input = textinput.New()
@@ -295,22 +280,27 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 			c.editing = true
 			return c.input.Focus()
 		}
-		c.rebuild(m.conditionField)
+		m.rebuildConditions()
 	}
 	return nil
 }
 
 func (m *Editor) conditionsPresentation(opts *panel.ScaffoldOptions) {
 	c := m.conditionEditor
+	c.normalizeFocus()
 	width, _ := panel.ControlsDimensions(*opts)
 	for i, rule := range c.rules {
 		values := []string{rule.operator, rule.valueType, rule.text}
+		if rule.valueType == "missing" {
+			values[1], values[2] = "Missing value", "Missing value"
+		}
 		for j, label := range []string{"Operator", "Value type", "Value"} {
 			item := panel.ControlItem{Label: fmt.Sprintf("Condition %d · %s", i+1, label), Value: panelText(values[j])}
 			if item.Value == "" {
 				item.Value = "(empty)"
 			}
 			if j == 2 {
+				item.Disabled = rule.valueType == "missing"
 				if _, err := rule.value(m.conditionField); err != nil {
 					item.Error = err.Error()
 				}
@@ -328,6 +318,37 @@ func (m *Editor) conditionsPresentation(opts *panel.ScaffoldOptions) {
 	}
 	opts.Controls = append(opts.Controls, panel.ControlItem{Label: "Add condition", Value: "Enter to add"}, panel.ControlItem{Label: "Remove condition", Value: fmt.Sprintf("Remove condition %d", c.ruleIndex+1), Disabled: len(c.rules) == 0})
 	opts.SelectedControl, opts.FirstVisibleControl = c.selected, c.firstVisible
+}
+
+func (c *conditionState) valueDisabled(row int) bool {
+	return row >= 0 && row < 3*len(c.rules) && row%3 == 2 && c.rules[row/3].valueType == "missing"
+}
+
+func (c *conditionState) normalizeFocus() {
+	c.selected = panel.MoveListSelection(c.selected, 0, 3*len(c.rules)+2)
+	if c.valueDisabled(c.selected) {
+		c.selected-- // Keep focus on this rule's value type.
+	}
+}
+
+func (c *conditionState) move(delta int, wrap bool) {
+	count := 3*len(c.rules) + 2
+	next := c.selected
+	for attempts := 0; attempts < count; attempts++ {
+		next += delta
+		if wrap {
+			next = (next + count) % count
+		} else if next < 0 || next >= count {
+			return
+		}
+		if !c.valueDisabled(next) {
+			c.selected = next
+			if next < 3*len(c.rules) {
+				c.ruleIndex = next / 3
+			}
+			return
+		}
+	}
 }
 
 func panelText(value string) string {

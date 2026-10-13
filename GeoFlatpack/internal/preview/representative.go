@@ -17,13 +17,14 @@ func RepresentativeIndex(data *fgb.Fgb, field string, group maplibre.StyleGroup)
 }
 
 func ConditionalRepresentativeIndex(data *fgb.Fgb, conditional *maplibre.ConditionalStyle, group maplibre.StyleGroup) (int, error) {
-	if err := conditional.Validate(); err != nil {
+	match, err := conditional.Matcher()
+	if err != nil {
 		return -1, err
 	}
-	return representativeIndex(data, "", group, conditional)
+	return representativeIndex(data, "", group, match)
 }
 
-func representativeIndex(data *fgb.Fgb, field string, group maplibre.StyleGroup, conditional *maplibre.ConditionalStyle) (int, error) {
+func representativeIndex(data *fgb.Fgb, field string, group maplibre.StyleGroup, match func(map[string]any) string) (int, error) {
 	if data != nil && data.Header != nil {
 		for i := range data.Features {
 			feature := &data.Features[i]
@@ -47,12 +48,8 @@ func representativeIndex(data *fgb.Fgb, field string, group maplibre.StyleGroup,
 					continue
 				}
 			}
-			if conditional != nil {
-				id, err := conditional.Match(feature.Properties)
-				if err != nil {
-					return -1, err
-				}
-				if id != group.RuleID {
+			if match != nil {
+				if match(feature.Properties) != group.RuleID {
 					continue
 				}
 			}
@@ -61,7 +58,7 @@ func representativeIndex(data *fgb.Fgb, field string, group maplibre.StyleGroup,
 			}
 		}
 	}
-	if conditional != nil {
+	if match != nil {
 		return -1, fmt.Errorf("No matching geometry to preview")
 	}
 	return -1, fmt.Errorf("No geometry to preview")

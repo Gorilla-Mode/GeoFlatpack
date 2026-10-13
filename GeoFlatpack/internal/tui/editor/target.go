@@ -14,6 +14,7 @@ type Target struct {
 	Icons                    map[string]svg.Svg
 	Group                    *maplibre.StyleGroup
 	Layer, Category, Feature int
+	CollectionKey            string
 }
 
 func (m *Editor) PreviewTarget() (Target, error) {
@@ -51,9 +52,11 @@ func (m *Editor) PreviewTarget() (Target, error) {
 	group := features.groups[groupIndex]
 	request.Group = &group
 	request.Layer, request.Category, request.Feature = m.selectedLayer, categoryIndex, groupIndex
-	if categories.items[categoryIndex].Conditional {
+	if categories.collectionActive {
 		var err error
-		request.Input.Conditional, err = categories.conditional[categoryIndex].snapshot(categories.fields[categoryIndex], true)
+		request.Input.CategoryField = ""
+		request.CollectionKey = categories.collectionKey(categories.collection.fields)
+		request.Input.Conditional, err = categories.collectionSnapshot(true)
 		if features.items[groupIndex].Omitted {
 			return request, fmt.Errorf("Otherwise is omitted")
 		}

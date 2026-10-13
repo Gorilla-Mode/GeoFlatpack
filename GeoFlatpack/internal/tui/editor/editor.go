@@ -117,9 +117,7 @@ func (m *Editor) Input(msg tea.Msg) tea.Cmd {
 					c.move(delta)
 				}
 				if (k.String() == "c" || k.String() == "C") && len(c.visibleIndices()) > 0 && c.fields[c.selected] != "" {
-					c.items[c.selected].Conditional = !c.items[c.selected].Conditional
-					c.conditional[c.selected].rebuild(c.fields[c.selected])
-					c.move(0)
+					c.toggleConditional()
 				}
 				if (k.String() == "h" || k.String() == "H") && len(c.items) > 0 {
 					c.toggleFilter()
@@ -141,7 +139,7 @@ func (m *Editor) Input(msg tea.Msg) tea.Cmd {
 				if delta != 0 {
 					f.selected = panel.MoveListSelection(f.selected, delta, len(f.items))
 				}
-				if (k.String() == "x" || k.String() == "X") && len(f.items) > 0 && m.currentCategories().items[m.currentCategories().active].Conditional && f.groups[f.selected].RuleID == "" {
+				if (k.String() == "x" || k.String() == "X") && len(f.items) > 0 && m.currentCategories().collectionActive && f.groups[f.selected].RuleID == "" {
 					f.items[f.selected].Omitted = !f.items[f.selected].Omitted
 				}
 
