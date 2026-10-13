@@ -83,11 +83,14 @@ func (c *conditionState) openValueChooser() {
 	c.choosing, c.choiceSelected, c.choiceFirstVisible = true, 0, 0
 	rule := c.rules[c.selected/3]
 	choices := c.valueChoices()
+	if rule.valueType == "string" {
+		c.choiceSelected = 1 // Start on an observed string or the custom action.
+	}
 	if rule.defined {
 		if index := slices.Index(choices, rule.text); index >= 0 {
-			c.choiceSelected = index
+			c.choiceSelected += index
 		} else if rule.valueType == "string" {
-			c.choiceSelected = len(choices) // Custom value action.
+			c.choiceSelected = len(choices) + 1 // Custom value action.
 		}
 	}
 }
@@ -109,8 +112,10 @@ func (m *Editor) conditionChoiceInput(key tea.KeyPressMsg) tea.Cmd {
 	c := m.conditionEditor
 	choices := c.valueChoices()
 	count := len(choices)
+	offset := 0
 	if c.rules[c.selected/3].valueType == "string" {
-		count++ // Always allow a custom string, even with no observed values.
+		offset = 1 // Missing value precedes the strings.
+		count += 2 // Missing value and custom input are always available.
 	}
 	switch key.String() {
 	case "esc":
@@ -128,11 +133,19 @@ func (m *Editor) conditionChoiceInput(key tea.KeyPressMsg) tea.Cmd {
 			c.choiceSelected = panel.MoveListSelection(c.choiceSelected, delta, count)
 		}
 	case "enter":
-		if c.choiceSelected == len(choices) {
+		rule := &c.rules[c.selected/3]
+		if offset == 1 && c.choiceSelected == 0 {
+			rule.valueType = "missing"
+			c.choosing = false
+			c.normalizeFocus()
+			m.rebuildConditions()
+			return nil
+		}
+		index := c.choiceSelected - offset
+		if index == len(choices) {
 			return c.editValue()
 		}
-		rule := &c.rules[c.selected/3]
-		rule.text, rule.defined = choices[c.choiceSelected], true
+		rule.text, rule.defined = choices[index], true
 		c.choosing = false
 		m.rebuildConditions()
 	}
@@ -141,6 +154,9 @@ func (m *Editor) conditionChoiceInput(key tea.KeyPressMsg) tea.Cmd {
 
 func (c *conditionState) choicesPresentation(opts *panel.ScaffoldOptions) {
 	stringValue := c.rules[c.selected/3].valueType == "string"
+	if stringValue {
+		opts.Controls = append(opts.Controls, panel.ControlItem{Label: "Missing value", Value: "Enter to select"})
+	}
 	for _, value := range c.valueChoices() {
 		label := value
 		if stringValue {
