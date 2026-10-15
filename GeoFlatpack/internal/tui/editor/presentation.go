@@ -9,7 +9,8 @@ import (
 func (m *Editor) Presentation(opts panel.ScaffoldOptions) panel.ScaffoldOptions {
 	opts = panel.ScaffoldOptions{
 		Width: opts.Width, Height: opts.Height, ActivePane: m.activePane,
-		PaneStyle: opts.PaneStyle, InactivePaneStyle: opts.InactivePaneStyle,
+		HideLayerSelection: m.hideLayerSelection,
+		PaneStyle:          opts.PaneStyle, InactivePaneStyle: opts.InactivePaneStyle,
 		TitleStyle: opts.TitleStyle, MutedStyle: opts.MutedStyle,
 		ScrollHintStyle: opts.ScrollHintStyle, ListStyles: opts.ListStyles,
 		PreviewContent: opts.PreviewContent, PreviewWarning: opts.PreviewWarning,

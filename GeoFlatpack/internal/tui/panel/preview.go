@@ -5,12 +5,9 @@ import "charm.land/lipgloss/v2"
 // PreviewRegion shares the exact borders, heading gap and content insets used
 // by the renderer. Coordinates are relative to the scaffold body.
 func PreviewRegion(opts ScaffoldOptions) PickerRect {
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	l := opts.layout()
 	size := paneInterior(l.preview, opts.PaneStyle)
-	x := 4 * l.gap
-	for i := 0; i < 4; i++ {
-		x += l.columns[i].width
-	}
+	x := l.columnX(4)
 
 	box := paneBox(l.preview, opts.PaneStyle)
 	if box.GetBorderLeft() {

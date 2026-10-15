@@ -3,6 +3,7 @@ package tui
 import "charm.land/bubbles/v2/key"
 
 type keyMap struct {
+	ToggleLayers      key.Binding
 	OmitLayer         key.Binding
 	PreviewSample     key.Binding
 	WriteFiles        key.Binding
@@ -23,6 +24,7 @@ type keyMap struct {
 
 func newKeyMap() keyMap {
 	return keyMap{
+		ToggleLayers:  key.NewBinding(key.WithKeys("l", "L"), key.WithHelp("L", "Hide layers")),
 		OmitLayer:     key.NewBinding(key.WithKeys("x", "X"), key.WithHelp("X", "Omit / restore layer")),
 		PreviewSample: key.NewBinding(key.WithKeys("d", "D"), key.WithHelp("D", "Sample / real preview")),
 		WriteFiles:    key.NewBinding(key.WithKeys("w", "W"), key.WithHelp("W", "Write files")),
@@ -72,6 +74,7 @@ func newKeyMap() keyMap {
 }
 
 type detailKeyMap struct {
+	ToggleLayers      key.Binding
 	Conditional       key.Binding
 	ConditionBack     key.Binding
 	ConditionValues   key.Binding
@@ -98,6 +101,7 @@ type detailKeyMap struct {
 
 func newDetailKeyMap() detailKeyMap {
 	return detailKeyMap{
+		ToggleLayers:    key.NewBinding(key.WithKeys("l", "L"), key.WithHelp("L", "Show or hide Layer selection in the editor; Category and Features share the freed width. Pane navigation skips hidden Layers. Inactive during input editing, value selection, help, and writing.")),
 		Conditional:     key.NewBinding(key.WithKeys("c"), key.WithHelp("C / H in Categories", "C marks the highlighted field and immediately activates the shared conditional collection (green indicators, blue names); press C again to unmark; H shows all fields or marked fields only. Enter on a marked field in the full view activates all marked fields and opens their combinations in Features; Enter in the filtered view edits that field’s conditions and keeps its category highlighted without changing export activation. Changing marks updates an active collection immediately; removing its last field clears activation. No category field cannot be marked.")),
 		ConditionBack:   key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace in condition Controls", "Return to Categories outside text editing; delete text while editing. Enter edits or commits a value; Escape cancels the edit.")),
 		ConditionValues: key.NewBinding(key.WithKeys("enter", "up", "down", "tab", "shift+tab"), key.WithHelp("Condition values", "Value types follow the field’s observed types, plus Missing value; schema types are used when no scalar values are loaded. Numbers use text input. Enter on a string or boolean Value opens its choices; Up/Down or Tab/Shift+Tab browses and Enter selects. Strings offer Missing value first, then every distinct loaded value, with Enter custom value to type another string. Selecting Missing value preserves the string draft and styling. Escape cancels custom input back to the choices, or closes the choices without changing the rule. Write, help and preview shortcuts are inactive while choosing or editing a value.")),
@@ -166,6 +170,7 @@ func (k keyMap) ShortHelp() []key.Binding {
 
 func (k detailKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{
+		k.ToggleLayers,
 		k.Conditional,
 		k.ConditionBack,
 		k.MoveCondition,

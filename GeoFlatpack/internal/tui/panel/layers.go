@@ -2,7 +2,10 @@ package panel
 
 // LayerWindow keeps the selection visible using the scaffold's pane dimensions.
 func LayerWindow(opts ScaffoldOptions) int {
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	if opts.HideLayerSelection {
+		return opts.FirstVisibleLayer
+	}
+	l := opts.layout()
 	style := opts.InactivePaneStyle
 	if opts.ActivePane == LayerPane {
 		style = opts.PaneStyle
@@ -13,7 +16,7 @@ func LayerWindow(opts ScaffoldOptions) int {
 
 // CategoryWindow uses the same list rules inside the Category pane.
 func CategoryWindow(opts ScaffoldOptions) int {
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	l := opts.layout()
 	style := opts.InactivePaneStyle
 	if opts.ActivePane == CategoryPane {
 		style = opts.PaneStyle
@@ -24,7 +27,7 @@ func CategoryWindow(opts ScaffoldOptions) int {
 
 // FeaturesWindow keeps the cursor or chosen styling target visible.
 func FeaturesWindow(opts ScaffoldOptions) int {
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	l := opts.layout()
 	style := opts.InactivePaneStyle
 	if opts.ActivePane == FeaturesPane {
 		style = opts.PaneStyle

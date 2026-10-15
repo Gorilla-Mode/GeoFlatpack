@@ -4,6 +4,7 @@ import (
 	"GeoFlatpack/internal/tui/panel"
 	"GeoFlatpack/internal/tui/terminalpreview"
 	tea "charm.land/bubbletea/v2"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -186,6 +187,13 @@ func (m *Model) panel() string {
 	}
 
 	primary := []key.Binding{helpKey, m.keys.Quit, selectKey}
+	if scaffold && !m.editor.Editing() {
+		toggleLayers := m.keys.ToggleLayers
+		if m.editor.LayerSelectionHidden() {
+			toggleLayers.SetHelp("L", "Show layers")
+		}
+		hints = slices.Insert(hints, min(2, len(hints)), toggleLayers)
+	}
 	if scaffold && m.preview != nil && m.preview.Supported() && !m.editor.Editing() {
 		hints = append([]key.Binding{m.keys.PreviewSample}, hints...)
 	}
