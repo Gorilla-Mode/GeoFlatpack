@@ -103,6 +103,7 @@ type Context struct {
 	Edit, Included, IncludedOnly, ChangeSVG                       bool
 	ConditionEditor, ConditionalCategory, MarkedOnly, MarkedField bool
 	ChoosingValue                                                 bool
+	ConditionSelected, GlobalCondition                            bool
 }
 
 func (m *Editor) Context() Context {
@@ -114,6 +115,11 @@ func (m *Editor) Context() Context {
 		result.MarkedField = len(c.visibleIndices()) > 0 && c.items[c.selected].Conditional
 	}
 	if m.conditionEditor != nil {
+		c := m.conditionEditor
+		result.ConditionSelected = c.selected >= 0 && c.selected < 3*len(c.rules)
+		if result.ConditionSelected {
+			result.GlobalCondition = c.rules[c.selected/3].global
+		}
 		result.Editing = m.conditionEditor.editing
 		result.ChoosingValue = m.conditionEditor.choosing && !m.conditionEditor.editing
 		return result

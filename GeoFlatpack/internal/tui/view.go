@@ -114,6 +114,13 @@ func (m *Model) panel() string {
 				key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "Categories")),
 				key.NewBinding(key.WithKeys("ctrl+up", "ctrl+down"), key.WithHelp("⌃↑/↓", "Move condition")),
 			}, hints...)
+			if c := m.editor.Context(); c.ConditionSelected {
+				action := "Make global"
+				if c.GlobalCondition {
+					action = "Make normal"
+				}
+				hints = append([]key.Binding{key.NewBinding(key.WithKeys("g", "G"), key.WithHelp("G", action))}, hints...)
+			}
 		}
 		if m.editor.Editing() {
 			helpKey = key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Cancel"))

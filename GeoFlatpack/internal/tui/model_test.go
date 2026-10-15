@@ -497,9 +497,9 @@ func TestConditionalValueChooserGlobalShortcutsAndHints(t *testing.T) {
 		t.Fatal("chooser footer does not describe value selection")
 	}
 	status := m.workflow.Status()
-	for _, code := range []rune{'w', 'W', '?', 'd', 'D', 'l', 'L'} {
+	for _, code := range []rune{'w', 'W', '?', 'd', 'D', 'l', 'L', 'g', 'G'} {
 		press(code)
-		if m.help.ShowAll || m.workflow.Busy() || m.workflow.Status() != status || !m.editor.Context().ChoosingValue || m.canWrite() || m.editor.LayerSelectionHidden() {
+		if m.help.ShowAll || m.workflow.Busy() || m.workflow.Status() != status || !m.editor.Context().ChoosingValue || m.canWrite() || m.editor.LayerSelectionHidden() || m.editor.Context().GlobalCondition {
 			t.Fatalf("global shortcut %c intercepted chooser", code)
 		}
 	}
@@ -532,6 +532,74 @@ func TestConditionalValueChooserGlobalShortcutsAndHints(t *testing.T) {
 	press(tea.KeyBackspace)
 	if m.editor.Pane() != panel.CategoryPane || m.editor.Editing() {
 		t.Fatal("Backspace did not return to Categories")
+	}
+}
+
+func TestGlobalConditionHintsAndScreenGuards(t *testing.T) {
+	m, _ := categoryModel(t)
+	m.Options.WriteFGB, m.Options.WriteStyle = true, true
+	updateModel(t, m, tea.WindowSizeMsg{Width: 300, Height: 60})
+	for _, code := range []rune{tea.KeyEnter, tea.KeyDown, 'c', 'h', tea.KeyEnter, tea.KeyEnter, tea.KeyEnter} {
+		stylePress(t, m, code)
+	}
+	updateModel(t, m, tea.PasteMsg{Content: "10"})
+	stylePress(t, m, tea.KeyEnter)
+	if !strings.Contains(ansi.Strip(m.View().Content), "G Make global") {
+		t.Fatal("condition Controls need a global shortcut hint")
+	}
+	stylePress(t, m, 'G')
+	if !m.editor.Context().GlobalCondition || !strings.Contains(ansi.Strip(m.View().Content), "G Make normal") || !strings.Contains(presentation(m).Controls[0].Label, "[Global]") {
+		t.Fatal("G did not update global status, label, and hint")
+	}
+	stylePress(t, m, '?')
+	for _, code := range []rune{'g', 'G'} {
+		stylePress(t, m, code)
+		if !m.editor.Context().GlobalCondition {
+			t.Fatal("help allowed G")
+		}
+	}
+	stylePress(t, m, '?')
+	updateModel(t, m, tea.WindowSizeMsg{Width: 240, Height: 40})
+	if !m.editor.Context().GlobalCondition {
+		t.Fatal("resize cleared global status")
+	}
+	stylePress(t, m, tea.KeyDown) // Add condition action.
+	if strings.Contains(ansi.Strip(m.View().Content), "G Make") {
+		t.Fatal("condition actions advertised G")
+	}
+	stylePress(t, m, 'g')
+	stylePress(t, m, tea.KeyUp)
+	if !m.editor.Context().GlobalCondition {
+		t.Fatal("G on action changed global status")
+	}
+	for i := range presentation(m).Features {
+		selectRow(t, m, panel.FeaturesPane, i)
+		stylePress(t, m, tea.KeyEnter)
+		addStyle(t, m, maplibre.RenderCircle)
+		setProperty(t, m, "circle-radius", "5")
+	}
+	// The second source is unrelated to this global condition.
+	selectRow(t, m, panel.LayerPane, 1)
+	populateReadyCategory(t, m, 1, 0)
+	selectRow(t, m, panel.LayerPane, 0)
+	m.editor.Focus(panel.CategoryPane)
+	stylePress(t, m, tea.KeyEnter) // Filtered Categories reopens condition Controls.
+	if !m.editor.Context().GlobalCondition || !m.canWrite() {
+		t.Fatal("global fixture did not retain its condition or become ready")
+	}
+	cmd := writeKey(t, m, 'W')
+	if cmd == nil || !m.workflow.Busy() {
+		t.Fatal("fixture did not start writing")
+	}
+	for _, code := range []rune{'g', 'G'} {
+		stylePress(t, m, code)
+		if !m.editor.Context().GlobalCondition || strings.Contains(ansi.Strip(m.View().Content), "G Make") {
+			t.Fatal("writing accepted or advertised G")
+		}
+	}
+	updateModel(t, m, cmd())
+	if !m.editor.Context().GlobalCondition {
+		t.Fatal("writing cleared global status")
 	}
 }
 

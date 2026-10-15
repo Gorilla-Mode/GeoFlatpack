@@ -16,6 +16,7 @@ import (
 type conditionRuleDraft struct {
 	id, operator, valueType, text string
 	defined                       bool
+	global                        bool
 }
 
 type conditionState struct {
@@ -108,7 +109,11 @@ func (c *conditionState) label(field string, r conditionRuleDraft) string {
 	} else if r.valueType == "string" {
 		text = strconv.Quote(text)
 	}
-	return field + " " + r.operator + " " + text
+	label := field + " " + r.operator + " " + text
+	if r.global {
+		label = "[Global] " + label
+	}
+	return label
 }
 
 // Stable group IDs retain each stack, omission and cursor as conditions change.
@@ -209,6 +214,10 @@ func (m *Editor) conditionsInput(msg tea.Msg) tea.Cmd {
 	}
 	c.normalizeFocus()
 	switch key.String() {
+	case "g", "G":
+		if c.selected < len(c.rules)*3 {
+			m.toggleGlobalCondition(c.selected / 3)
+		}
 	case "backspace":
 		m.Focus(panel.CategoryPane)
 	case "up", "down", "tab", "shift+tab":
@@ -304,6 +313,9 @@ func (m *Editor) conditionsPresentation(opts *panel.ScaffoldOptions) {
 		}
 		for j, label := range []string{"Operator", "Value type", "Value"} {
 			item := panel.ControlItem{Label: fmt.Sprintf("Condition %d · %s", i+1, label), Value: panelText(values[j])}
+			if rule.global {
+				item.Label = "[Global] " + item.Label
+			}
 			if item.Value == "" {
 				item.Value = "(empty)"
 			}

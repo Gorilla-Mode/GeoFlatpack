@@ -74,6 +74,7 @@ func newKeyMap() keyMap {
 }
 
 type detailKeyMap struct {
+	GlobalCondition   key.Binding
 	ToggleLayers      key.Binding
 	Conditional       key.Binding
 	ConditionBack     key.Binding
@@ -101,6 +102,7 @@ type detailKeyMap struct {
 
 func newDetailKeyMap() detailKeyMap {
 	return detailKeyMap{
+		GlobalCondition: key.NewBinding(key.WithKeys("g", "G"), key.WithHelp("G in condition Controls", "Make the selected condition global or normal. One global condition per source; marking another makes the previous one normal. Its separate Features group replaces all ordinary styling when true, without multiplying ordinary combinations. Active only while its field participates in the conditional collection; inactive during input editing, value selection, help, and writing.")),
 		ToggleLayers:    key.NewBinding(key.WithKeys("l", "L"), key.WithHelp("L", "Show or hide Layer selection in the editor; Category and Features share the freed width. Pane navigation skips hidden Layers. Inactive during input editing, value selection, help, and writing.")),
 		Conditional:     key.NewBinding(key.WithKeys("c"), key.WithHelp("C / H in Categories", "C marks the highlighted field and immediately activates the shared conditional collection (green indicators, blue names); press C again to unmark; H shows all fields or marked fields only. Enter on a marked field in the full view activates all marked fields and opens their combinations in Features; Enter in the filtered view edits that field’s conditions and keeps its category highlighted without changing export activation. Changing marks updates an active collection immediately; removing its last field clears activation. No category field cannot be marked.")),
 		ConditionBack:   key.NewBinding(key.WithKeys("backspace"), key.WithHelp("Backspace in condition Controls", "Return to Categories outside text editing; delete text while editing. Enter edits or commits a value; Escape cancels the edit.")),
@@ -175,6 +177,7 @@ func (k detailKeyMap) FullHelp() [][]key.Binding {
 		k.ConditionBack,
 		k.MoveCondition,
 		k.OmitLayer,
+		k.GlobalCondition,
 		k.ConditionValues,
 		k.PreviewSample,
 		k.WriteFiles,
