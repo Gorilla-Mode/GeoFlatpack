@@ -12,6 +12,7 @@ import (
 	_ "image/png"
 	"strings"
 	"time"
+	"unicode"
 
 	"GeoFlatpack/fgb"
 	"GeoFlatpack/internal/preview"
@@ -66,7 +67,7 @@ type representativeChoice struct {
 	err   error
 }
 
-type previewProbeTimeoutMsg struct{}
+type previewProbeTimeoutMsg struct{ phase int }
 type previewRenderMsg struct{ generation int }
 type previewDoneMsg struct {
 	generation int
@@ -98,7 +99,32 @@ func (s *State) Init() tea.Cmd {
 	// A 1×1 black RGB pixel, followed by cell/window pixel-size queries.
 	query := ansi.KittyGraphics([]byte("AAAA"), opts.Options()...)
 
-	return tea.Batch(tea.Raw(query+ansi.WindowOp(16)+ansi.WindowOp(14)), tea.Tick(time.Second, func(time.Time) tea.Msg { return previewProbeTimeoutMsg{} }))
+	return probeCommand(query+ansi.WindowOp(16)+ansi.WindowOp(14), 0)
+}
+
+// Start the deadline after dispatching the query, not while Init is scheduling it.
+// A deadline only changes the status text; a matching late reply is still valid.
+func probeCommand(query string, phase int) tea.Cmd {
+	return tea.Sequence(tea.Raw(query), func() tea.Msg {
+		return tea.Tick(time.Second, func(time.Time) tea.Msg { return previewProbeTimeoutMsg{phase} })()
+	})
+}
+
+func probeName(phase int) string {
+	if phase == 0 {
+		return "Kitty graphics query"
+	}
+	return "virtual placement probe"
+}
+
+func safeProbeReply(payload []byte) string {
+	text := strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Cf) {
+			return -1
+		}
+		return r
+	}, string(payload))
+	return string([]rune(text)[:min(160, len([]rune(text)))])
 }
 
 func deletePreviewImage(id int) string {
@@ -134,7 +160,7 @@ func (s *State) Close() error {
 }
 
 func (s *State) Input(msg tea.Msg, dimensions Dimensions) tea.Cmd {
-	if s == nil {
+	if s == nil || s.ctx.Err() != nil {
 		return nil
 	}
 
@@ -148,39 +174,43 @@ func (s *State) Input(msg tea.Msg, dimensions Dimensions) tea.Cmd {
 			s.cellWidth, s.cellHeight = max(1, msg.Width/dimensions.TerminalWidth), max(1, msg.Height/dimensions.TerminalHeight)
 		}
 	case uv.KittyGraphicsEvent:
-		if msg.Options.ID != s.base || s.phase >= 2 {
+		if s.phase >= 2 || msg.Options.ID != s.base+s.phase {
 			return nil
 		}
 
 		if string(msg.Payload) != "OK" {
-			s.phase, s.message = 3, "Preview unsupported: terminal does not support Kitty graphics."
-
-			return tea.Raw(deletePreviewImage(s.base))
+			s.message = "Preview unsupported: terminal rejected " + probeName(s.phase) + ": " + safeProbeReply(msg.Payload)
+			s.phase = 3
+			if s.owned[msg.Options.ID] {
+				delete(s.owned, msg.Options.ID)
+				return tea.Raw(deletePreviewImage(msg.Options.ID))
+			}
+			return nil
 		}
 
 		if s.phase == 0 {
 			s.phase = 1
-			s.owned[s.base] = true
+			s.message = "Checking virtual placement support…"
+			s.nextID++ // Reserve an ID distinct from the query and future previews.
+			id := s.base + s.nextID
 			var b bytes.Buffer
-			_ = kitty.EncodeGraphics(&b, image.NewRGBA(image.Rect(0, 0, 1, 1)), &kitty.Options{Action: kitty.TransmitAndPut, ID: s.base, Format: kitty.PNG, Transmission: kitty.Direct, VirtualPlacement: true, Columns: 1, Rows: 1})
-
-			return tea.Raw(b.String())
+			if err := kitty.EncodeGraphics(&b, image.NewRGBA(image.Rect(0, 0, 1, 1)), &kitty.Options{Action: kitty.TransmitAndPut, ID: id, Format: kitty.PNG, Transmission: kitty.Direct, VirtualPlacement: true, Columns: 1, Rows: 1}); err != nil {
+				s.phase, s.message = 3, "Preview unavailable: could not encode virtual placement probe"
+				return nil
+			}
+			s.owned[id] = true
+			return probeCommand(b.String(), s.phase)
 		}
 
 		if s.phase == 1 {
 			s.phase, s.message = 2, "Loading preview…"
-			delete(s.owned, s.base)
+			delete(s.owned, msg.Options.ID)
 
-			return tea.Raw(deletePreviewImage(s.base))
+			return tea.Raw(deletePreviewImage(msg.Options.ID))
 		}
 	case previewProbeTimeoutMsg:
-		if s.phase < 2 {
-			s.phase, s.message = 3, "Preview unsupported: terminal does not support Kitty graphics."
-			if s.owned[s.base] {
-				delete(s.owned, s.base)
-
-				return tea.Raw(deletePreviewImage(s.base))
-			}
+		if s.phase < 2 && msg.phase == s.phase {
+			s.message = "Preview unavailable: No response to " + probeName(s.phase) + "; still listening."
 		}
 	case previewRenderMsg:
 		if msg.generation != s.generation || s.suspended || s.phase != 2 {
