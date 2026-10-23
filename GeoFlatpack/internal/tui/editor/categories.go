@@ -22,6 +22,8 @@ type categoryState struct {
 	collectionActive bool
 	collection       *collectionState
 	collections      map[string]*collectionState
+	globalDrafts     map[maplibre.StyleGroup]conditionGroupDraft
+	globalPreview    *globalPreviewChoice
 }
 
 func newCategoryState(data *fgb.Fgb) categoryState {

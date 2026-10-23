@@ -30,7 +30,7 @@ func controlsListOptions(opts ScaffoldOptions, size paneSize) ListOptions {
 
 // ControlsDimensions and ControlsWindow share the renderer's layout calculation.
 func ControlsDimensions(opts ScaffoldOptions) (int, int) {
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	l := opts.layout()
 	if !l.split {
 		return 0, 0
 	}
@@ -46,7 +46,7 @@ func ControlsWindow(opts ScaffoldOptions) int {
 		return 0
 	}
 
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	l := opts.layout()
 	if !l.split {
 		return opts.FirstVisibleControl
 	}
@@ -87,16 +87,13 @@ func populateControls(p *paneOptions, opts ScaffoldOptions, size paneSize) {
 // ControlsRegion gives the content rectangle in scaffold coordinates. Rendering
 // and picker mouse input share the same borders, heading gap, and list insets.
 func ControlsRegion(opts ScaffoldOptions) PickerRect {
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	l := opts.layout()
 	if !l.split {
 		return PickerRect{}
 	}
 
 	lower := newLowerLayout(opts, l)
-	x := 4 * l.gap
-	for i := 0; i < 4; i++ {
-		x += l.columns[i].width
-	}
+	x := l.columnX(4)
 
 	box := paneBox(l.controls, lower.box)
 	if box.GetBorderLeft() {

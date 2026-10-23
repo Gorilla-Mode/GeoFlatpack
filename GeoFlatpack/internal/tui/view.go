@@ -4,6 +4,7 @@ import (
 	"GeoFlatpack/internal/tui/panel"
 	"GeoFlatpack/internal/tui/terminalpreview"
 	tea "charm.land/bubbletea/v2"
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -113,6 +114,13 @@ func (m *Model) panel() string {
 				key.NewBinding(key.WithKeys("backspace"), key.WithHelp("⌫", "Categories")),
 				key.NewBinding(key.WithKeys("ctrl+up", "ctrl+down"), key.WithHelp("⌃↑/↓", "Move condition")),
 			}, hints...)
+			if c := m.editor.Context(); c.ConditionSelected {
+				action := "Make global"
+				if c.GlobalCondition {
+					action = "Make normal"
+				}
+				hints = append([]key.Binding{key.NewBinding(key.WithKeys("g", "G"), key.WithHelp("G", action))}, hints...)
+			}
 		}
 		if m.editor.Editing() {
 			helpKey = key.NewBinding(key.WithKeys("esc"), key.WithHelp("Esc", "Cancel"))
@@ -186,6 +194,13 @@ func (m *Model) panel() string {
 	}
 
 	primary := []key.Binding{helpKey, m.keys.Quit, selectKey}
+	if scaffold && !m.editor.Editing() {
+		toggleLayers := m.keys.ToggleLayers
+		if m.editor.LayerSelectionHidden() {
+			toggleLayers.SetHelp("L", "Show layers")
+		}
+		hints = slices.Insert(hints, min(2, len(hints)), toggleLayers)
+	}
 	if scaffold && m.preview != nil && m.preview.Supported() && !m.editor.Editing() {
 		hints = append([]key.Binding{m.keys.PreviewSample}, hints...)
 	}

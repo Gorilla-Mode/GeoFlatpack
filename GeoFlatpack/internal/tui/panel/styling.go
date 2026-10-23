@@ -17,7 +17,7 @@ func stylingListOptions(opts ScaffoldOptions, interior paneSize) ListOptions {
 
 // StylingWindow uses the same clipping and margins as the other list panes.
 func StylingWindow(opts ScaffoldOptions) int {
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	l := opts.layout()
 	box := opts.InactivePaneStyle
 	if opts.ActivePane == FeatureStylingPane {
 		box = opts.PaneStyle
@@ -60,7 +60,7 @@ func newLowerLayout(opts ScaffoldOptions, l scaffoldLayout) lowerLayout {
 
 // InfoDimensions returns the display-only description area's content size.
 func InfoDimensions(opts ScaffoldOptions) (width, height int) {
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	l := opts.layout()
 	if !l.split {
 		return 0, 0
 	}
@@ -86,7 +86,7 @@ func stackListOptions(opts ScaffoldOptions, interior paneSize) ListOptions {
 
 // StackWindow keeps the active layer visible without adding a focus target.
 func StackWindow(opts ScaffoldOptions) int {
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	l := opts.layout()
 	lower := newLowerLayout(opts, l)
 	if !l.split || !lower.divided {
 		return opts.StackFirstVisible

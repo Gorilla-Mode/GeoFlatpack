@@ -9,7 +9,8 @@ import (
 func (m *Editor) Presentation(opts panel.ScaffoldOptions) panel.ScaffoldOptions {
 	opts = panel.ScaffoldOptions{
 		Width: opts.Width, Height: opts.Height, ActivePane: m.activePane,
-		PaneStyle: opts.PaneStyle, InactivePaneStyle: opts.InactivePaneStyle,
+		HideLayerSelection: m.hideLayerSelection,
+		PaneStyle:          opts.PaneStyle, InactivePaneStyle: opts.InactivePaneStyle,
 		TitleStyle: opts.TitleStyle, MutedStyle: opts.MutedStyle,
 		ScrollHintStyle: opts.ScrollHintStyle, ListStyles: opts.ListStyles,
 		PreviewContent: opts.PreviewContent, PreviewWarning: opts.PreviewWarning,
@@ -102,6 +103,7 @@ type Context struct {
 	Edit, Included, IncludedOnly, ChangeSVG                       bool
 	ConditionEditor, ConditionalCategory, MarkedOnly, MarkedField bool
 	ChoosingValue                                                 bool
+	ConditionSelected, GlobalCondition                            bool
 }
 
 func (m *Editor) Context() Context {
@@ -113,6 +115,11 @@ func (m *Editor) Context() Context {
 		result.MarkedField = len(c.visibleIndices()) > 0 && c.items[c.selected].Conditional
 	}
 	if m.conditionEditor != nil {
+		c := m.conditionEditor
+		result.ConditionSelected = c.selected >= 0 && c.selected < 3*len(c.rules)
+		if result.ConditionSelected {
+			result.GlobalCondition = c.rules[c.selected/3].global
+		}
 		result.Editing = m.conditionEditor.editing
 		result.ChoosingValue = m.conditionEditor.choosing && !m.conditionEditor.editing
 		return result

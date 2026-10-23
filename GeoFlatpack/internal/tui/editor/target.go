@@ -56,6 +56,19 @@ func (m *Editor) PreviewTarget() (Target, error) {
 		var err error
 		request.Input.CategoryField = ""
 		request.CollectionKey = categories.collectionKey(categories.collection.fields)
+		if categories.collection.global != nil {
+			compiled, compileErr := categories.compileGlobalCollection(true)
+			if compileErr != nil {
+				return request, compileErr
+			}
+			request.Input.Conditional = compiled.style
+			if features.items[groupIndex].Omitted {
+				return request, fmt.Errorf("Otherwise is omitted")
+			}
+			resolved, resolveErr := categories.resolveGlobalPreview(layer.Data, compiled, group)
+			request.Group = &resolved
+			return request, resolveErr
+		}
 		request.Input.Conditional, err = categories.collectionSnapshot(true)
 		if features.items[groupIndex].Omitted {
 			return request, fmt.Errorf("Otherwise is omitted")
