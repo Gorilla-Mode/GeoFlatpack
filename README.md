@@ -1,6 +1,6 @@
 # GeoFlatpack
 
-GeoFlatpack converts each layer in a `.gml` file into its own FlatGeobuf file and generates one shared MapLibre stylesheet. All layers are converted and parsed in memory before styling or writing outputs.
+GeoFlatpack converts each layer in a `.gml` or `.fgdb` file into its own FlatGeobuf file and generates one shared MapLibre stylesheet. All layers are converted and parsed in memory before styling or writing outputs.
 
 ## Requirements
 
@@ -116,12 +116,14 @@ Sources are empty GeoJSON placeholders for the consuming application to populate
 
 ## Development status
 
-- [x] Convert GML to FGB
+- [x] Convert GML and FGBD to FGB
 - [x] Load FGB into memory
 - [x] Parse FGB
 - [x] Web demo
 - [x] Generate MapLibre stylesheet
 - [x] Cli user input for maplibre stylesheet
 - [x] Layered GML support
-- [ ] Tui user input for maplibre stylesheet
+- [x] Tui user input for maplibre stylesheet
 - [x] Symbology support
+- [x] SVG icon support
+- [x] Conditional styling
