@@ -1,9 +1,13 @@
+import { useState } from 'react';
+
 type HeaderTreeProps = {
   value: unknown;
   label?: string;
+  initialOpen?: boolean;
 };
 
-export default function HeaderTree({ value, label }: HeaderTreeProps) {
+export default function HeaderTree({ value, label, initialOpen = false }: HeaderTreeProps) {
+  const [open, setOpen] = useState(initialOpen);
   const prefix = label === undefined ? '' : `${label}: `;
   const displayValue = value instanceof Float64Array ? Array.from(value) : value;
 
@@ -21,10 +25,10 @@ export default function HeaderTree({ value, label }: HeaderTreeProps) {
     : 'Object';
 
   return (
-    <details open>
+    <details open={open} onToggle={event => setOpen(event.currentTarget.open)}>
       <summary>{prefix}{description}</summary>
       <div className="header-tree-children">
-        {entries.map(([key, child]) => (
+        {open && entries.map(([key, child]) => (
           <HeaderTree key={key} label={key} value={child} />
         ))}
       </div>

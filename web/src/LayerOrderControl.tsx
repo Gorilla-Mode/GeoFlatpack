@@ -60,6 +60,7 @@ export default function LayerOrderControl({ layers, displayErrors, onMove }: Lay
     <div className="layer-order-control" onKeyDown={event => {
       if (event.key === 'Escape' && open) {
         event.preventDefault();
+        event.stopPropagation();
         clearDrag();
         setOpen(false);
         toggle.current?.focus();
@@ -74,7 +75,7 @@ export default function LayerOrderControl({ layers, displayErrors, onMove }: Lay
       </button>
       {open && (
         <section id="layer-order-panel" className="layer-order-panel" aria-labelledby="layer-order-title">
-          <h2 id="layer-order-title" className="header-panel-title">Layer order</h2>
+          <h3 id="layer-order-title" className="header-panel-title">Layer order</h3>
           <p id="layer-order-help">Active sources only. Top layers draw above lower layers. Drag a handle or use the arrows to reorder.</p>
           {orderedLayers.length === 0 && <p>No active sources. Enable a source in Select sources.</p>}
           <ol className="layer-order-list" aria-describedby="layer-order-help" onDragLeave={event => {

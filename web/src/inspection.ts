@@ -1,6 +1,6 @@
 import { GeometryType } from 'flatgeobuf/lib/mjs/flat-geobuf/geometry-type.js';
 import { ColumnType } from 'flatgeobuf/lib/mjs/flat-geobuf/column-type.js';
-import type { FeatureCollection, Geometry } from 'geojson';
+import type { Feature, FeatureCollection, Geometry } from 'geojson';
 import type { DatasetHeader } from './dataset';
 
 function coordinatesTree(value: unknown): unknown {
@@ -21,6 +21,10 @@ function geometryTree(geometry: Geometry | null): Record<string, unknown> {
       ? { Geometries: geometry.geometries.map(geometryTree) }
       : { Coordinates: coordinatesTree(geometry.coordinates) }),
   };
+}
+
+export function createFeatureInspection(feature: Feature) {
+  return { ...geometryTree(feature.geometry), Properties: feature.properties };
 }
 
 export function createInspection(header: DatasetHeader | null, data?: FeatureCollection) {
@@ -50,7 +54,7 @@ export function createInspection(header: DatasetHeader | null, data?: FeatureCol
     // A parsed header remains inspectable even if feature decoding fails.
     ...(data ? { Features: Object.fromEntries(data.features.map((feature, index) => [
       `Feature ${index + 1}`,
-      { ...geometryTree(feature.geometry), Properties: feature.properties },
+      createFeatureInspection(feature),
     ])) } : {}),
   };
 }

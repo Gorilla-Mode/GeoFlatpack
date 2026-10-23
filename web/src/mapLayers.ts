@@ -1,4 +1,3 @@
-import { Popup } from 'maplibre-gl';
 import type { Map, MapMouseEvent, StyleSpecification } from 'maplibre-gl';
 import type { Feature } from 'geojson';
 import { getErrorMessage, getSourceName } from './dataset';
@@ -6,6 +5,7 @@ import type { Dataset, SourceLayer } from './dataset';
 import { loadEmbeddedIcons } from './styleIcons';
 
 type LoadedLayer = SourceLayer & { dataset: Dataset };
+export type FeatureSelection = { layerId: string; featureIndex: number };
 
 function removeOverlays(map: Map, layerIds: string[], sourceIds: string[], imageIds: string[]) {
   for (const id of [...layerIds].reverse()) if (map.getLayer(id)) map.removeLayer(id);
@@ -13,7 +13,8 @@ function removeOverlays(map: Map, layerIds: string[], sourceIds: string[], image
   for (const id of imageIds) if (map.hasImage(id)) map.removeImage(id);
 }
 
-export async function renderMapLayers(map: Map, layers: { layer: LoadedLayer; style: StyleSpecification }[], signal: AbortSignal) {
+export async function renderMapLayers(map: Map, layers: { layer: LoadedLayer; style: StyleSpecification }[], signal: AbortSignal,
+  onSelect: (selection: FeatureSelection | null) => void = () => {}) {
   const prepared = await Promise.all(layers.map(async entry => ({
     ...entry, icons: await loadEmbeddedIcons(entry.style, signal),
   })));
@@ -24,7 +25,6 @@ export async function renderMapLayers(map: Map, layers: { layer: LoadedLayer; st
   const owners: Record<string, { layer: LoadedLayer; findFeature: (id: unknown) => Feature | undefined }> = {};
   const errors: Record<string, string> = {};
   const renderedLayerIds = new Set<string>();
-  const popup = new Popup({ className: 'obstacle-popup', closeOnClick: false, maxWidth: 'min(360px, calc(100vw - 48px))' });
   const canvas = map.getCanvas();
 
   function findFeature({ point: { x, y } }: MapMouseEvent) {
@@ -38,17 +38,8 @@ export async function renderMapLayers(map: Map, layers: { layer: LoadedLayer; st
   }
 
   function showFeature(event: MapMouseEvent) {
-    popup.remove();
     const found = findFeature(event);
-    if (!found) return;
-    const content = document.createElement('div');
-    const title = Object.assign(document.createElement('h2'), { className: 'obstacle-popup-title', textContent: found.layer.label });
-    const properties = Object.assign(document.createElement('pre'), {
-      className: 'obstacle-properties', tabIndex: 0, textContent: JSON.stringify(found.feature.properties, null, 2),
-    });
-    properties.setAttribute('aria-label', 'Feature properties');
-    content.append(title, properties);
-    popup.setLngLat(event.lngLat).setDOMContent(content).addTo(map);
+    onSelect(found ? { layerId: found.layer.id, featureIndex: found.layer.dataset.data.features.indexOf(found.feature) } : null);
   }
 
   function updateCursor(event: MapMouseEvent) { canvas.style.cursor = findFeature(event) ? 'pointer' : ''; }
@@ -125,7 +116,6 @@ export async function renderMapLayers(map: Map, layers: { layer: LoadedLayer; st
 
   // App may have removed the map before React runs the overlay effect's cleanup.
   function cleanup(mapActive = true) {
-    popup.remove();
     map.off('click', showFeature);
     map.off('mousemove', updateCursor);
     canvas.removeEventListener('mouseleave', resetCursor);
