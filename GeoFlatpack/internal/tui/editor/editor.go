@@ -14,6 +14,7 @@ type Editor struct {
 	icons                            map[string]svg.Svg
 	loaded, writeFGB, interactive    bool
 	activePane                       panel.Pane
+	hideLayerSelection               bool
 	layers                           []panel.ListItem
 	categories                       []categoryState
 	stylingCatalog                   stylingCatalog
@@ -44,7 +45,12 @@ func (m *Editor) SetContext(writeFGB, interactive bool) {
 
 func (m *Editor) Pane() panel.Pane { return m.activePane }
 
+func (m *Editor) LayerSelectionHidden() bool { return m.hideLayerSelection }
+
 func (m *Editor) Focus(pane panel.Pane) {
+	if pane == panel.LayerPane && m.hideLayerSelection {
+		pane = panel.CategoryPane
+	}
 	m.StopDragging()
 	m.activePane = pane
 	if pane != panel.ControlsPane {
@@ -61,6 +67,14 @@ func (m *Editor) Open() {
 	m.selectedLayer, m.firstVisibleLayer = 0, 0
 }
 
+func (m *Editor) movePane(delta panel.Pane) {
+	pane := (m.activePane + panel.PaneCount + delta) % panel.PaneCount
+	if pane == panel.LayerPane && m.hideLayerSelection {
+		pane = (pane + panel.PaneCount + delta) % panel.PaneCount
+	}
+	m.Focus(pane)
+}
+
 // Input handles editor shortcuts and delegates form events to their drafts.
 func (m *Editor) Input(msg tea.Msg) tea.Cmd {
 	if !m.interactive {
@@ -68,13 +82,21 @@ func (m *Editor) Input(msg tea.Msg) tea.Cmd {
 	}
 
 	if k, ok := msg.(tea.KeyPressMsg); ok {
+		if (k.String() == "l" || k.String() == "L") && !m.Editing() {
+			m.hideLayerSelection = !m.hideLayerSelection
+			if m.hideLayerSelection && m.activePane == panel.LayerPane {
+				m.Focus(panel.CategoryPane)
+			}
+			return nil
+		}
+
 		switch k.String() {
 		case "alt+right", "alt+f", "ctrl+right":
-			m.Focus((m.activePane + 1) % panel.PaneCount)
+			m.movePane(1)
 
 			return nil
 		case "alt+left", "alt+b", "ctrl+left":
-			m.Focus((m.activePane + panel.PaneCount - 1) % panel.PaneCount)
+			m.movePane(-1)
 
 			return nil
 		case "esc":

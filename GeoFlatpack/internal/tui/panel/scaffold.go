@@ -24,6 +24,7 @@ type ScaffoldOptions struct {
 	Width                int
 	Height               int
 	ActivePane           Pane
+	HideLayerSelection   bool
 	PaneStyle            lipgloss.Style
 	InactivePaneStyle    lipgloss.Style
 	TitleStyle           lipgloss.Style
@@ -74,6 +75,7 @@ type paneSize struct {
 
 type scaffoldLayout struct {
 	gap              int
+	firstColumn      int
 	columns          [5]paneSize
 	preview          paneSize
 	controls         paneSize
@@ -115,6 +117,28 @@ func newScaffoldLayout(width, height int) scaffoldLayout {
 	return l
 }
 
+func (opts ScaffoldOptions) layout() scaffoldLayout {
+	l := newScaffoldLayout(opts.Width, opts.Height)
+	if opts.HideLayerSelection {
+		// Reclaim the Layers column and its separator without moving Styling
+		// or Preview/Controls. Features receives the extra cell on odd widths.
+		freed := l.columns[0].width + l.gap
+		l.columns[0].width = 0
+		l.columns[1].width += freed / 2
+		l.columns[2].width += freed - freed/2
+		l.firstColumn = 1
+	}
+	return l
+}
+
+func (l scaffoldLayout) columnX(column int) int {
+	x := 0
+	for i := l.firstColumn; i < column; i++ {
+		x += l.columns[i].width + l.gap
+	}
+	return x
+}
+
 func (s paneSize) interior() paneSize {
 	if s.width >= 3 && s.height >= 3 {
 		return paneSize{s.width - 2, s.height - 2}
@@ -140,7 +164,7 @@ func Scaffold(opts ScaffoldOptions) string {
 		return ""
 	}
 
-	l := newScaffoldLayout(opts.Width, opts.Height)
+	l := opts.layout()
 	selectable := func(pane Pane, size paneSize, heading string) string {
 		box, title := opts.InactivePaneStyle, opts.MutedStyle
 		if pane == opts.ActivePane {
@@ -175,13 +199,13 @@ func Scaffold(opts ScaffoldOptions) string {
 
 	gap := lipgloss.NewStyle().Width(l.gap).Height(opts.Height).Render(strings.Repeat(" ", l.gap))
 
-	return lipgloss.JoinHorizontal(lipgloss.Top,
-		selectable(LayerPane, l.columns[0], "Layer selection"), gap,
-		selectable(CategoryPane, l.columns[1], "Category"), gap,
-		selectable(FeaturesPane, l.columns[2], "Features"), gap,
-		selectable(FeatureStylingPane, l.columns[3], stylingHeading), gap,
-		preview,
-	)
+	headings := []string{"Layer selection", "Category", "Features", stylingHeading}
+	columns := make([]string, 0, 9)
+	for i := l.firstColumn; i < 4; i++ {
+		columns = append(columns, selectable(Pane(i), l.columns[i], headings[i]), gap)
+	}
+	columns = append(columns, preview)
+	return lipgloss.JoinHorizontal(lipgloss.Top, columns...)
 }
 
 func renderPreviewControls(opts ScaffoldOptions, l scaffoldLayout) string {

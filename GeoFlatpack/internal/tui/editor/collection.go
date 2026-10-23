@@ -19,6 +19,7 @@ type collectionState struct {
 	fields       []int
 	features     *featureState
 	combinations []maplibre.ConditionalCombination
+	global       *globalConditionRef
 }
 
 func (s *categoryState) markedFields() []int {
@@ -33,6 +34,15 @@ func (s *categoryState) markedFields() []int {
 }
 
 func (s *categoryState) collectionKey(fields []int) string {
+	key := s.normalCollectionKey(fields)
+	if global := s.globalCondition(fields); global != nil {
+		raw, _ := json.Marshal([]any{key, s.fields[global.field], global.ruleID})
+		return string(raw)
+	}
+	return key
+}
+
+func (s *categoryState) normalCollectionKey(fields []int) string {
 	names := make([]string, len(fields))
 	for i, index := range fields {
 		names[i] = s.fields[index]
@@ -68,6 +78,7 @@ func (s *categoryState) refreshActiveIndicators() {
 // Rebuild only replaces the visible product. Existing stacks are kept by tuple
 // identity; extending a collection seeds new children from its previous parent.
 func (s *categoryState) rebuildCollection(seedField int) {
+	s.saveGlobalDraft()
 	fields := s.markedFields()
 	if len(fields) == 0 {
 		s.collectionActive, s.active = false, -1
@@ -82,13 +93,16 @@ func (s *categoryState) rebuildCollection(seedField int) {
 	previous := s.collection
 	if target == nil {
 		target = &collectionState{fields: slices.Clone(fields), features: &featureState{chosen: -1}}
-		if len(fields) == 1 {
+		target.global = s.globalCondition(fields)
+		if len(fields) == 1 && target.global == nil {
 			s.conditional[fields[0]].rebuild(s.fields[fields[0]])
 			target.features = &s.conditional[fields[0]].features
 		}
 		s.collections[key] = target
 	}
-	if len(fields) > 1 {
+	if target.global != nil {
+		s.rebuildGlobalCollection(target, previous)
+	} else if len(fields) > 1 {
 		var seed *collectionState
 		if previous != nil && len(previous.fields) < len(fields) && fieldSubset(previous.fields, fields) {
 			seed = previous
@@ -100,6 +114,12 @@ func (s *categoryState) rebuildCollection(seedField int) {
 			seed = &collectionState{fields: []int{seedField}, features: &s.conditional[seedField].features}
 		}
 		s.rebuildProduct(target, seed)
+	}
+	if target.global == nil && previous != nil && previous.global != nil && slices.Equal(fields, previous.fields) {
+		shareSurvivingGroups(target.features, previous.features)
+	}
+	if previous != nil && previous.global != nil && (target.global == nil || *target.global != *previous.global) {
+		s.restoreDemotedGlobal(target, *previous.global)
 	}
 	s.collection = target
 	if s.collectionActive {
@@ -235,7 +255,7 @@ func (m *Editor) rebuildConditions() {
 	m.conditionEditor.rebuild(m.conditionField)
 	s := m.currentCategories()
 	for _, collection := range s.collections {
-		if len(collection.fields) > 1 {
+		if len(collection.fields) > 1 && collection.global == nil {
 			s.pruneCollection(collection)
 		}
 	}
@@ -292,6 +312,13 @@ func (s *categoryState) collectionSnapshot(preview bool) (*maplibre.ConditionalS
 	collection := s.collection
 	if collection == nil {
 		return nil, fmt.Errorf("no active conditional collection")
+	}
+	if collection.global != nil {
+		compiled, err := s.compileGlobalCollection(preview)
+		if err != nil {
+			return nil, err
+		}
+		return compiled.style, nil
 	}
 	if len(collection.fields) == 1 {
 		field := collection.fields[0]

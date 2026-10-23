@@ -5,12 +5,14 @@ import (
 	"GeoFlatpack/internal/app"
 	"GeoFlatpack/internal/tui/panel"
 	"GeoFlatpack/internal/tui/workflow"
+	"GeoFlatpack/style/maplibre"
 	"GeoFlatpack/style/maplibre/svg"
 	"context"
 	"errors"
 	"fmt"
 	"image/color"
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -495,9 +497,9 @@ func TestConditionalValueChooserGlobalShortcutsAndHints(t *testing.T) {
 		t.Fatal("chooser footer does not describe value selection")
 	}
 	status := m.workflow.Status()
-	for _, code := range []rune{'w', 'W', '?', 'd', 'D'} {
+	for _, code := range []rune{'w', 'W', '?', 'd', 'D', 'l', 'L', 'g', 'G'} {
 		press(code)
-		if m.help.ShowAll || m.workflow.Busy() || m.workflow.Status() != status || !m.editor.Context().ChoosingValue || m.canWrite() {
+		if m.help.ShowAll || m.workflow.Busy() || m.workflow.Status() != status || !m.editor.Context().ChoosingValue || m.canWrite() || m.editor.LayerSelectionHidden() || m.editor.Context().GlobalCondition {
 			t.Fatalf("global shortcut %c intercepted chooser", code)
 		}
 	}
@@ -530,6 +532,317 @@ func TestConditionalValueChooserGlobalShortcutsAndHints(t *testing.T) {
 	press(tea.KeyBackspace)
 	if m.editor.Pane() != panel.CategoryPane || m.editor.Editing() {
 		t.Fatal("Backspace did not return to Categories")
+	}
+}
+
+func TestGlobalConditionHintsAndScreenGuards(t *testing.T) {
+	m, _ := categoryModel(t)
+	m.Options.WriteFGB, m.Options.WriteStyle = true, true
+	updateModel(t, m, tea.WindowSizeMsg{Width: 300, Height: 60})
+	for _, code := range []rune{tea.KeyEnter, tea.KeyDown, 'c', 'h', tea.KeyEnter, tea.KeyEnter, tea.KeyEnter} {
+		stylePress(t, m, code)
+	}
+	updateModel(t, m, tea.PasteMsg{Content: "10"})
+	stylePress(t, m, tea.KeyEnter)
+	if !strings.Contains(ansi.Strip(m.View().Content), "G Make global") {
+		t.Fatal("condition Controls need a global shortcut hint")
+	}
+	stylePress(t, m, 'G')
+	if !m.editor.Context().GlobalCondition || !strings.Contains(ansi.Strip(m.View().Content), "G Make normal") || !strings.Contains(presentation(m).Controls[0].Label, "[Global]") {
+		t.Fatal("G did not update global status, label, and hint")
+	}
+	stylePress(t, m, '?')
+	for _, code := range []rune{'g', 'G'} {
+		stylePress(t, m, code)
+		if !m.editor.Context().GlobalCondition {
+			t.Fatal("help allowed G")
+		}
+	}
+	stylePress(t, m, '?')
+	updateModel(t, m, tea.WindowSizeMsg{Width: 240, Height: 40})
+	if !m.editor.Context().GlobalCondition {
+		t.Fatal("resize cleared global status")
+	}
+	stylePress(t, m, tea.KeyDown) // Add condition action.
+	if strings.Contains(ansi.Strip(m.View().Content), "G Make") {
+		t.Fatal("condition actions advertised G")
+	}
+	stylePress(t, m, 'g')
+	stylePress(t, m, tea.KeyUp)
+	if !m.editor.Context().GlobalCondition {
+		t.Fatal("G on action changed global status")
+	}
+	for i := range presentation(m).Features {
+		selectRow(t, m, panel.FeaturesPane, i)
+		stylePress(t, m, tea.KeyEnter)
+		addStyle(t, m, maplibre.RenderCircle)
+		setProperty(t, m, "circle-radius", "5")
+	}
+	// The second source is unrelated to this global condition.
+	selectRow(t, m, panel.LayerPane, 1)
+	populateReadyCategory(t, m, 1, 0)
+	selectRow(t, m, panel.LayerPane, 0)
+	m.editor.Focus(panel.CategoryPane)
+	stylePress(t, m, tea.KeyEnter) // Filtered Categories reopens condition Controls.
+	if !m.editor.Context().GlobalCondition || !m.canWrite() {
+		t.Fatal("global fixture did not retain its condition or become ready")
+	}
+	cmd := writeKey(t, m, 'W')
+	if cmd == nil || !m.workflow.Busy() {
+		t.Fatal("fixture did not start writing")
+	}
+	for _, code := range []rune{'g', 'G'} {
+		stylePress(t, m, code)
+		if !m.editor.Context().GlobalCondition || strings.Contains(ansi.Strip(m.View().Content), "G Make") {
+			t.Fatal("writing accepted or advertised G")
+		}
+	}
+	updateModel(t, m, cmd())
+	if !m.editor.Context().GlobalCondition {
+		t.Fatal("writing cleared global status")
+	}
+}
+
+func TestLayerSelectionToggleAndNavigation(t *testing.T) {
+	for initial := panel.LayerPane; initial < panel.PaneCount; initial++ {
+		t.Run(fmt.Sprint(initial), func(t *testing.T) {
+			m := scaffoldModel(t)
+			if presentation(m).HideLayerSelection {
+				t.Fatal("Layers must be visible by default")
+			}
+			m.editor.Focus(initial)
+			stylePress(t, m, 'l')
+			want := initial
+			if initial == panel.LayerPane {
+				want = panel.CategoryPane
+			}
+			if !presentation(m).HideLayerSelection || m.editor.Pane() != want {
+				t.Fatal("hiding Layers lost focus or failed to transfer it to Category")
+			}
+			stylePress(t, m, 'L')
+			if presentation(m).HideLayerSelection || m.editor.Pane() != want {
+				t.Fatal("showing Layers must preserve focus")
+			}
+			stylePress(t, m, 'L')
+			for _, input := range []struct {
+				code rune
+				mod  tea.KeyMod
+			}{
+				{tea.KeyRight, tea.ModAlt}, {tea.KeyRight, tea.ModCtrl}, {'f', tea.ModAlt},
+				{tea.KeyLeft, tea.ModAlt}, {tea.KeyLeft, tea.ModCtrl}, {'b', tea.ModAlt},
+			} {
+				m.editor.Focus(panel.CategoryPane)
+				panes := []panel.Pane{panel.FeaturesPane, panel.FeatureStylingPane, panel.ControlsPane, panel.CategoryPane}
+				if input.code == tea.KeyLeft || input.code == 'b' {
+					panes = []panel.Pane{panel.ControlsPane, panel.FeatureStylingPane, panel.FeaturesPane, panel.CategoryPane}
+				}
+				for step := 0; step < 8; step++ {
+					updateModel(t, m, tea.KeyPressMsg{Code: input.code, Mod: input.mod})
+					if want := panes[step%len(panes)]; m.editor.Pane() != want {
+						t.Fatalf("hidden Layers navigation: focus = %v, want %v", m.editor.Pane(), want)
+					}
+				}
+				if m.editor.Pane() != panel.CategoryPane {
+					t.Fatal("navigation did not wrap through the four visible panes")
+				}
+			}
+			stylePress(t, m, 'l')
+			updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt})
+			if m.editor.Pane() != panel.LayerPane {
+				t.Fatal("showing Layers did not restore it to navigation")
+			}
+		})
+	}
+}
+
+func TestLayerSelectionPreservesDraftsAndWindows(t *testing.T) {
+	_, data := categoryModel(t)
+	layers := make([]app.Layer, 12)
+	for i := range layers {
+		layers[i] = app.Layer{Name: fmt.Sprintf("Source %d", i), SourceID: fmt.Sprint(i), Data: data}
+	}
+	m := modelWithLayers(t, layers)
+	m.Options.WriteFGB, m.Options.WriteStyle = true, true
+	updateModel(t, m, tea.WindowSizeMsg{Width: 180, Height: 24})
+	selectRow(t, m, panel.LayerPane, 8)
+	stylePress(t, m, tea.KeyEnter)
+	selectRow(t, m, panel.CategoryPane, 1)
+	stylePress(t, m, tea.KeyEnter)
+	selectRow(t, m, panel.FeaturesPane, 7)
+	stylePress(t, m, tea.KeyEnter)
+	addStyle(t, m, maplibre.RenderCircle)
+	setProperty(t, m, "circle-radius", "12")
+	before, options := presentation(m), m.Options
+	if before.SelectedLayer != 8 || before.FirstVisibleLayer == 0 || before.FirstVisibleFeature == 0 {
+		t.Fatal("fixture must select and scroll a source and its Features")
+	}
+	for _, code := range []rune{'l', 'L'} {
+		stylePress(t, m, code)
+		after := presentation(m)
+		after.HideLayerSelection = before.HideLayerSelection
+		if !reflect.DeepEqual(before, after) || !reflect.DeepEqual(m.Options, options) {
+			t.Fatal("toggle changed source selection, scrolling, styling, controls, or output settings")
+		}
+	}
+	// Keep an unfinished input while focus moves to Styling, then toggle there.
+	typeControl(t, m, "123")
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt})
+	stylePress(t, m, 'l')
+	updateModel(t, m, tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt})
+	if !m.editor.Editing() || !strings.Contains(ansi.Strip(presentation(m).Controls[0].Value), "123") {
+		t.Fatal("toggle discarded an unfinished control draft")
+	}
+}
+
+func TestLayerSelectionGuardsAndSessionVisibility(t *testing.T) {
+	m := scaffoldModel(t)
+	updateModel(t, m, tea.WindowSizeMsg{Width: 240, Height: 40})
+	if !strings.Contains(ansi.Strip(m.View().Content), "L Hide layers") {
+		t.Fatal("visible Layers need a contextual hide hint")
+	}
+	stylePress(t, m, 'l')
+	if !strings.Contains(ansi.Strip(m.View().Content), "L Show layers") {
+		t.Fatal("hidden Layers need a contextual show hint")
+	}
+	stylePress(t, m, '?')
+	if !strings.Contains(ansi.Strip(m.View().Content), "Show or hide Layer selection") {
+		t.Fatal("keyboard reference does not explain the toggle")
+	}
+	stylePress(t, m, 'L')
+	updateModel(t, m, tea.WindowSizeMsg{Width: 81, Height: 20})
+	stylePress(t, m, '?')
+	if !presentation(m).HideLayerSelection || m.editor.Pane() != panel.CategoryPane {
+		t.Fatal("help or resize lost visibility or focus")
+	}
+	for _, screen := range []screen{loadingScreen, failureScreen, completionScreen} {
+		m.screen = screen
+		stylePress(t, m, 'l')
+		if !m.editor.LayerSelectionHidden() {
+			t.Fatal("shortcut toggled Layers outside the editor")
+		}
+	}
+	stylePress(t, m, tea.KeyEnter)
+	if !presentation(m).HideLayerSelection || m.editor.Pane() != panel.CategoryPane {
+		t.Fatal("reopening editor lost visibility or focused hidden Layers")
+	}
+
+	m, _ = writeReadyModel(t)
+	selectProperty(t, m, "circle-radius")
+	typeControl(t, m, "")
+	for _, code := range []rune{'l', 'L'} {
+		updateModel(t, m, tea.KeyPressMsg{Code: code, Text: string(code)})
+	}
+	view := ansi.Strip(m.View().Content)
+	if m.editor.LayerSelectionHidden() || !strings.Contains(ansi.Strip(presentation(m).Controls[0].Value), "lL") || strings.Contains(view, "L Hide layers") {
+		t.Fatal("toggle intercepted input text or appeared while editing")
+	}
+	stylePress(t, m, tea.KeyEscape)
+	stylePress(t, m, 'l')
+	cmd := writeKey(t, m, 'w')
+	if cmd == nil || !m.workflow.Busy() {
+		t.Fatal("fixture did not start writing")
+	}
+	for _, code := range []rune{'l', 'L'} {
+		stylePress(t, m, code)
+		if !m.editor.LayerSelectionHidden() {
+			t.Fatal("writing allowed the toggle")
+		}
+	}
+	if strings.Contains(ansi.Strip(m.View().Content), "L Show layers") {
+		t.Fatal("writing advertised the toggle")
+	}
+	updateModel(t, m, cmd())
+	if !presentation(m).HideLayerSelection {
+		t.Fatal("writing reset layer visibility")
+	}
+}
+
+func TestLayerSelectionWidthAllocation(t *testing.T) {
+	for _, tt := range []struct {
+		width   int
+		columns [4]int // Category, Features, Styling, Preview/Controls.
+	}{
+		{29, [4]int{5, 5, 3, 13}},
+		{38, [4]int{6, 7, 4, 18}},
+		{76, [4]int{12, 13, 8, 40}},
+		{80, [4]int{14, 14, 9, 40}},
+		{116, [4]int{20, 20, 13, 60}},
+		{121, [4]int{21, 22, 14, 61}},
+	} {
+		t.Run(fmt.Sprint(tt.width), func(t *testing.T) {
+			opts := panel.ScaffoldOptions{Width: tt.width, Height: 17, HideLayerSelection: true,
+				PaneStyle: newStyles().pane, InactivePaneStyle: newStyles().inactivePane}
+			view := ansi.Strip(panel.Scaffold(opts))
+			tops := make([]string, 4)
+			for i, width := range tt.columns {
+				tops[i] = "╭" + strings.Repeat("─", width-2) + "╮"
+			}
+			if got := strings.Split(view, "\n")[0]; got != strings.Join(tops, " ") {
+				t.Fatalf("top borders = %q, want widths %v", got, tt.columns)
+			}
+			if lipgloss.Width(view) != tt.width || lipgloss.Height(view) != 17 || strings.Contains(view, "Layer selection") {
+				t.Fatal("hidden Layers overflowed or remained visible")
+			}
+		})
+	}
+	for width := 1; width <= 30; width++ {
+		for height := 1; height <= 12; height++ {
+			opts := panel.ScaffoldOptions{Width: width, Height: height, HideLayerSelection: true,
+				PaneStyle: newStyles().pane, InactivePaneStyle: newStyles().inactivePane}
+			view := panel.Scaffold(opts)
+			if lipgloss.Width(view) != width || lipgloss.Height(view) != height {
+				t.Fatalf("%dx%d: hidden Layers rendered %dx%d", width, height, lipgloss.Width(view), lipgloss.Height(view))
+			}
+		}
+	}
+}
+
+func TestLayerSelectionPreservesPreviewAndControlsGeometry(t *testing.T) {
+	for _, stack := range []bool{false, true} {
+		for width := 1; width <= 220; width++ {
+			for _, height := range []int{1, 3, 5, 17, 40} {
+				opts := panel.ScaffoldOptions{Width: width, Height: height, ShowStack: stack,
+					PaneStyle: newStyles().pane, InactivePaneStyle: newStyles().inactivePane}
+				preview, controls := panel.PreviewRegion(opts), panel.ControlsRegion(opts)
+				w, h := panel.ControlsDimensions(opts)
+				opts.HideLayerSelection = true
+				hiddenW, hiddenH := panel.ControlsDimensions(opts)
+				if panel.PreviewRegion(opts) != preview || panel.ControlsRegion(opts) != controls || w != hiddenW || h != hiddenH {
+					t.Fatalf("%dx%d stack=%v: toggle moved or resized Preview/Controls", width, height, stack)
+				}
+			}
+		}
+	}
+	m, _ := writeReadyModel(t)
+	selectProperty(t, m, "circle-color")
+	m.editor.Focus(panel.ControlsPane)
+	updateModel(t, m, tea.WindowSizeMsg{Width: 220, Height: 40})
+	visibleDimensions := m.previewDimensions()
+	for _, hidden := range []bool{false, true} {
+		if hidden {
+			stylePress(t, m, 'l')
+		}
+		if m.previewDimensions() != visibleDimensions {
+			t.Fatal("toggle changed terminal preview placement")
+		}
+		opts, l := presentation(m), m.layout()
+		region := panel.ControlsRegion(opts)
+		geometry := panel.ColorPickerGeometry(*opts.ColorPicker, region.Width, region.Height)
+		square := geometry.Controls[panel.PickerSquare]
+		mouse := tea.Mouse{Button: tea.MouseLeft,
+			X: l.frame.GetPaddingLeft() + region.X + square.X - geometry.OffsetX + square.Width - 1,
+			Y: l.frame.GetPaddingTop() + l.headerHeight + l.gap + region.Y + square.Y - geometry.OffsetY}
+		updateModel(t, m, tea.MouseClickMsg(mouse))
+		picker := presentation(m).ColorPicker
+		if !m.editor.Editing() || picker.Saturation != 1 || picker.Lightness != 1 {
+			t.Fatalf("hidden=%v: mouse did not hit the rendered square's top right", hidden)
+		}
+		stylePress(t, m, 'L')
+		if m.editor.LayerSelectionHidden() != hidden {
+			t.Fatal("toggle intercepted active color adjustment")
+		}
+		updateModel(t, m, tea.MouseReleaseMsg(mouse))
+		stylePress(t, m, tea.KeyEscape)
 	}
 }
 
